@@ -786,6 +786,10 @@ Future<void> main() async {
     if (!(transitions[currentStage] ?? <String>[]).contains(stage)) {
       return reply(409, {'error': 'Invalid deal transition from ' + currentStage + ' to ' + stage + '. Review the current milestone before moving forward.'});
     }
+    final accepted = List<dynamic>.from(item['feeAcceptedBy'] as List? ?? []);
+    if (stage == 'agreement' && accepted.toSet().length < 2) {
+      return reply(409, {'error': 'Both participants must acknowledge the written commission terms before the deal can move to agreement.'});
+    }
     final history = List<dynamic>.from(item['history'] as List? ?? []);
     history.add({'stage': stage, 'actorId': c['sub'], 'at': now(), 'note': clean(b?['note'], 500)});
     await deals.updateOne(where.eq('publicId', id), modify.set('stage', stage).set('updatedAt', now()).set('history', history));
@@ -798,6 +802,9 @@ Future<void> main() async {
     final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final item = asMap(await deals.findOne(where.eq('publicId', id).eq('participants', c['sub'])));
     if (item == null) return reply(404, {'error': 'Deal not found.'});
+    if (['completed', 'cancelled'].contains(item['stage'])) {
+      return reply(409, {'error': 'Closed deals cannot accept or change commission acknowledgement.'});
+    }
     final accepted = List<dynamic>.from(item['feeAcceptedBy'] as List? ?? []);
     if (!accepted.contains(c['sub'])) accepted.add(c['sub']);
     await deals.updateOne(where.eq('publicId', id), modify.set('feeAcceptedBy', accepted).set('updatedAt', now()));
