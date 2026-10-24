@@ -3,11 +3,11 @@ description: Rwanda property marketplace API with account, listing, messaging, d
 version: 1.1.0
 publish_to: none
 environment:
-  sdk: '>=3.4.0 <4.0.0'
+  sdk: '>=3.7.0 <4.0.0'
 dependencies:
   shelf: ^1.4.2
   shelf_router: ^1.1.4
-  mongo_dart: ^0.10.3
+  mongo_dart: ^0.10.10
   crypto: ^3.0.6
   uuid: ^4.5.1
   bcrypt: ^1.2.0
