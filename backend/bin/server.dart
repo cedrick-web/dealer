@@ -271,7 +271,7 @@ Future<void> main() async {
   });
   r.get('/api/v1/me/leads', (Request q) async {
     final c = userFrom(q); if (c == null) return unauthenticated();
-    final all = await leads.find(where.or(where.eq('requesterId', c['sub']), where.eq('ownerId', c['sub'])), sort: {'createdAt': -1}).toList();
+    final all = await leads.find(where.eq('requesterId', c['sub']).or(where.eq('ownerId', c['sub'])), sort: {'createdAt': -1}).toList();
     return reply(200, {'data': all.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
 
