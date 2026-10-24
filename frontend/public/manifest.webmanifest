@@ -1,0 +1,16 @@
+{
+  "id": "/",
+  "name": "Dealer Property Desk",
+  "short_name": "Dealer",
+  "description": "Rwanda property marketplace with saved listings, evidence, conversations and deal milestones.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f7f8f4",
+  "theme_color": "#174b3c",
+  "categories": ["business", "lifestyle", "productivity"],
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
