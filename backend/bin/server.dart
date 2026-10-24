@@ -388,6 +388,16 @@ Future<void> main() async {
     if ((p['district'] ?? '').isNotEmpty && p['district'] != 'All Rwanda') filter['location.district'] = p['district'];
     if ((p['type'] ?? '').isNotEmpty && p['type'] != 'All properties') filter['propertyType'] = p['type']!.toLowerCase();
     if (validPurpose(p['purpose']) != null) filter['purpose'] = p['purpose'];
+    final searchText = clean(p['q'], 100);
+    if (searchText.isNotEmpty) {
+      final escaped = RegExp.escape(searchText);
+      filter[r'$or'] = <Map<String, dynamic>>[
+        {'title': {r'$regex': escaped, r'$options': 'i'}},
+        {'description': {r'$regex': escaped, r'$options': 'i'}},
+        {'location.district': {r'$regex': escaped, r'$options': 'i'}},
+        {'location.sector': {r'$regex': escaped, r'$options': 'i'}},
+      ];
+    }
     final max = int.tryParse(p['maxPrice'] ?? '');
     if (max != null && max > 0) filter['price.amount'] = {'$lte': max};
     final page = (int.tryParse(p['page'] ?? '1') ?? 1).clamp(1, 100000);
