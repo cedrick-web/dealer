@@ -12,6 +12,7 @@ import { EmptyState, ErrorNote, Field, Metric, StatusPill } from '@/components/a
 import { EnquiriesView } from '@/components/app/enquiries-view';
 import { DashboardView } from '@/components/app/dashboard-view';
 import { DealWorkspaceView } from '@/components/app/deal-workspace';
+import { MessagingView } from '@/components/app/messaging-view';
 import { NotificationsView } from '@/components/app/notifications-view';
 import { AgentDirectoryView, AgentApplicationView, AgentReviewQueue, type AgentApplicationForm } from '@/components/app/agent-workspace';
 import { Textarea } from '@/components/ui/textarea';
@@ -569,7 +570,19 @@ export default function App() {
 
         {(view==='my-listings'||view==='saved')&&<section className="view-content"><div className="toolbar toolbar-light"><label className="wide-search"><Search size={16}/><input placeholder="Filter your properties" value={search} onChange={e=>setSearch(e.target.value)}/></label><label className="filter-control"><SlidersHorizontal size={15}/><select value={sort} onChange={e=>setSort(e.target.value)}><option value="newest">Newest first</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option></select></label><span className="count-pill">{filtered.length} properties</span></div>{filtered.length?<div className="listing-grid">{filtered.map(item=><div className="listing-workspace-wrap" key={item.publicId}><ListingCard item={item} saved={savedIds.includes(item.publicId)} showSave={view==='saved'} onSave={()=>saveListing(item)} onOpen={()=>{setDocs([]);setModal(item)}}/>{view==='my-listings'&&<div className="owner-card-actions"><button className="btn btn-outline btn-sm" onClick={()=>beginEditListing(item)}><FileText size={14}/>Edit & resubmit</button>{item.status!=='withdrawn'&&<button className="btn btn-danger btn-sm" onClick={()=>withdrawListing(item)}><X size={14}/>Withdraw</button>}</div>}</div>)}</div>:<EmptyState icon={view==='saved'?Heart:Building2} title={view==='saved'?'No saved properties yet':'No listings to show'} body={view==='saved'?'Save properties from Discover to keep a shortlist synced to your account.':'Submit a property to see its review status and evidence trail here.'} action={()=>navTo(view==='saved'?'discover':'new-listing')} button={view==='saved'?'Explore properties':'Create a listing'}/>}</section>}
 
-        {view==='messages'&&<section className="view-content"><div className="messages-layout"><div className="conversation-list panel"><div className="panel-heading"><div><h3>Conversations</h3><p>{conversations.length} property threads</p></div><button className="icon-button" onClick={()=>void withBusy(async()=>{await refreshWorkspace(user!)})} aria-label="Refresh conversations"><RefreshCw size={16}/></button></div>{conversations.map(c=><button className={'conversation-item '+(selectedConversation===c.publicId?'selected':'')} key={c.publicId} onClick={()=>setSelectedConversation(c.publicId)}><span className="conversation-avatar"><House size={18}/></span><span className="conversation-text"><b>{c.listingTitle}</b><small>{c.lastMessage||'No messages yet'} </small><em>{dateLabel(c.updatedAt)}</em></span><ChevronRight size={15}/></button>)}{!conversations.length&&<p className="inline-empty">Open a published property and choose “Message owner” to start a private conversation.</p>}</div><div className="message-pane panel">{selectedConversation&&conversations.find(c=>c.publicId===selectedConversation)?<><div className="message-header"><span className="conversation-avatar"><House size={17}/></span><div><b>{conversations.find(c=>c.publicId===selectedConversation)?.listingTitle}</b><small><LockKeyhole size={12}/> Private, authenticated thread</small></div><button className="icon-button" onClick={()=>void refreshMessages(selectedConversation)} aria-label="Reload messages"><RefreshCw size={15}/></button></div><div className="message-history">{messages.map(m=><div className={'message-bubble '+(m.senderId===user?.publicId?'own':'other')} key={m.publicId}><p>{m.text}</p><small>{m.senderId===user?.publicId?'You':'Property participant'} · {new Date(m.createdAt).toLocaleString()}</small></div>)}{!messages.length&&<div className="message-empty"><MessageCircle size={25}/><b>Start with a clear question.</b><p>Ask about viewing times, property details or the disclosed fee arrangement.</p></div>}</div><form className="message-composer" onSubmit={sendMessage}><textarea rows={2} value={messageDraft} onChange={e=>setMessageDraft(e.target.value)} placeholder="Write a message…" maxLength={3000}/><button type="submit" disabled={!messageDraft.trim()||busy} className="btn btn-primary" aria-label="Send message"><Send size={17}/></button></form></>:<EmptyState icon={MessageCircle} title="Your conversations" body="Choose a conversation on the left, or start one from a property listing."/>}</div></div></section>}
+        {view==='messages'&&<MessagingView
+          conversations={conversations}
+          selectedConversationId={selectedConversation}
+          messages={messages}
+          userId={user?.publicId}
+          busy={busy}
+          draft={messageDraft}
+          setDraft={setMessageDraft}
+          onSelectConversation={setSelectedConversation}
+          onRefreshConversations={()=>void withBusy(async()=>refreshWorkspace(user!))}
+          onReloadMessages={()=>{if(selectedConversation)void refreshMessages(selectedConversation)}}
+          onSendMessage={sendMessage}
+        />}
 
         {view==='deals'&&<DealWorkspaceView
           deals={deals}
