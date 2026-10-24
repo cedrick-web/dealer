@@ -227,6 +227,15 @@ export default function App() {
     return ()=>{alive=false};
   },[refreshWorkspace]);
   useEffect(()=>{const timer=window.setTimeout(()=>{refreshListings().catch(()=>{})},250);return()=>window.clearTimeout(timer)},[refreshListings]);
+  const refreshNotifications = useCallback(async() => {
+    try {
+      const result=await api.notifications();
+      setNotifications(result.data||[]);
+      setUnreadCount(result.unreadCount||0);
+    } catch {
+      // The main workspace still works if the notification service is briefly unavailable.
+    }
+  },[]);
   useEffect(()=>{if(view==='messages'&&selectedConversation)refreshMessages(selectedConversation)},[view,selectedConversation,refreshMessages]);
   useEffect(()=>{
     if(view!=='messages'||!user)return;
@@ -261,15 +270,6 @@ export default function App() {
     if(!user) { setAuthMode('login');setAuthOpen(true); setReturnView(target || view); if(target) setView(target); return false; }
     return true;
   };
-  const refreshNotifications = useCallback(async() => {
-    try {
-      const result=await api.notifications();
-      setNotifications(result.data||[]);
-      setUnreadCount(result.unreadCount||0);
-    } catch {
-      // The main workspace still works if the notification service is briefly unavailable.
-    }
-  },[]);
   const navTo = (target:View) => {
     setMobileNav(false);
     if(['dashboard','enquiries','new-listing','my-listings','saved','messages','deals','account','admin','agent-application','agent-review','notifications'].includes(target) && !user) { setReturnView(target); setAuthMode('login'); setAuthOpen(true); setView(target==='new-listing'?'discover':target); return; }
