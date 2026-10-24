@@ -29,6 +29,12 @@ services:
       - "8080:8080"
     volumes:
       - private_documents:/data/private-documents
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
     depends_on:
       mongo:
         condition: service_healthy
