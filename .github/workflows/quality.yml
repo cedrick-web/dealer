@@ -138,7 +138,8 @@ jobs:
             -H "Authorization: Bearer $admin_token" -H 'content-type: application/json' \
             --data '{"decision":"approve","note":"CI runtime smoke approval only"}' | jq -e '.status == "published"'
           curl --fail --silent --show-error "http://127.0.0.1:8080/api/v1/listings/$listing_id" | jq -e '.data.status == "published"'
-          curl --fail --silent --show-error "http://127.0.0.1:8080/api/v1/listings?q=CI%20smoke&district=Gasabo&purpose=sale&maxPrice=200000000&limit=10" | jq -e '.total >= 1'
+          curl --fail --silent --show-error "http://127.0.0.1:8080/api/v1/listings?q=CI%20smoke&district=Gasabo&purpose=sale&maxPrice=200000000&sort=price-low&limit=10" | jq -e '.total >= 1'
+          curl --fail --silent --show-error "http://127.0.0.1:8080/api/v1/listings?q=CI%20smoke&district=Gasabo&purpose=sale&page=2&limit=1&sort=price-low" | jq -e '.page == 2 and (.data | length) == 0'
           curl --fail --silent --show-error "http://127.0.0.1:8080/api/v1/me/notifications?limit=100" \
             -H "Authorization: Bearer $admin_token" | jq -e '.unreadCount >= 1'
       - name: Diagnose API integration failure
