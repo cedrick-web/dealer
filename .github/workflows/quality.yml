@@ -67,9 +67,9 @@ jobs:
 
 
   container-build:
-    name: Docker image and Compose smoke checks
+    name: Docker runtime smoke test
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       MONGO_ROOT_USERNAME: dealer_ci
       MONGO_ROOT_PASSWORD: dealer_ci_alphanumeric_password_123
@@ -77,15 +77,68 @@ jobs:
       JWT_SECRET: ci_only_secret_that_is_long_enough_for_hmac_signing_and_never_used_outside_this_job
       WEB_ORIGIN: http://localhost:5173,dealer://app
       VITE_API_URL: http://localhost:8080
+      BOOTSTRAP_ADMIN_EMAIL: ci-admin@example.test
+      BOOTSTRAP_ADMIN_PASSWORD: CI_Admin_Password_12345
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
       - name: Validate Docker Compose configuration
         run: docker compose config -q
-      - name: Build API image
-        run: docker build --tag dealer-api:ci ./backend
-      - name: Build frontend image
-        run: docker build --build-arg VITE_API_URL=http://localhost:8080 --tag dealer-web:ci ./frontend
+      - name: Build and start the complete stack
+        run: docker compose up --build -d
+      - name: Wait for API and frontend readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent --show-error http://127.0.0.1:8080/health -o /tmp/dealer-health.json; then
+              break
+            fi
+            sleep 2
+          done
+          test -s /tmp/dealer-health.json
+          cat /tmp/dealer-health.json
+          jq -e '.status == "ok" and .database == "connected"' /tmp/dealer-health.json
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent --show-error http://127.0.0.1:5173/ -o /tmp/dealer-index.html; then
+              break
+            fi
+            sleep 2
+          done
+          grep -q 'id="root"' /tmp/dealer-index.html
+      - name: Exercise registration, moderation, search and notifications
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent http://127.0.0.1:8080/api/v1/districts | jq -e '.data | index("Gasabo") != null'
+          email="ci-smoke-$GITHUB_RUN_ID@example.test"
+          member_json=$(curl --fail --silent --show-error -X POST http://127.0.0.1:8080/api/v1/auth/register \
+            -H 'content-type: application/json' \
+            --data "{\"name\":\"CI Smoke Member\",\"email\":\"$email\",\"password\":\"CI_Smoke_Password_123\"}")
+          member_token=$(printf '%s' "$member_json" | jq -er '.token')
+          listing_json=$(curl --fail --silent --show-error -X POST http://127.0.0.1:8080/api/v1/listings \
+            -H "Authorization: Bearer $member_token" -H 'content-type: application/json' \
+            --data '{"title":"CI smoke test property listing","description":"This is a CI-only property listing used to validate API routes and moderation transitions.","propertyType":"house","purpose":"sale","location":{"district":"Gasabo","sector":"Kinyinya"},"price":{"amount":185000000,"currency":"RWF","period":"once"}}')
+          printf '%s' "$listing_json" | jq -e '.status == "pending_review"'
+          listing_id=$(printf '%s' "$listing_json" | jq -er '.id')
+          if curl --fail --silent http://127.0.0.1:8080/api/v1/listings/"$listing_id"; then
+            echo "Pending listings must not be publicly readable."
+            exit 1
+          fi
+          admin_json=$(curl --fail --silent --show-error -X POST http://127.0.0.1:8080/api/v1/auth/login \
+            -H 'content-type: application/json' \
+            --data '{"email":"ci-admin@example.test","password":"CI_Admin_Password_12345"}')
+          admin_token=$(printf '%s' "$admin_json" | jq -er '.token')
+          curl --fail --silent --show-error -X PATCH "http://127.0.0.1:8080/api/v1/admin/listings/$listing_id/review" \
+            -H "Authorization: Bearer $admin_token" -H 'content-type: application/json' \
+            --data '{"decision":"approve","note":"CI runtime smoke approval only"}' | jq -e '.status == "published"'
+          curl --fail --silent --show-error "http://127.0.0.1:8080/api/v1/listings/$listing_id" | jq -e '.data.status == "published"'
+          curl --fail --silent --show-error "http://127.0.0.1:8080/api/v1/listings?q=CI%20smoke&district=Gasabo&purpose=sale&maxPrice=200000000&limit=10" | jq -e '.total >= 1'
+          curl --fail --silent --show-error "http://127.0.0.1:8080/api/v1/me/notifications?limit=100" \
+            -H "Authorization: Bearer $member_token" | jq -e '.unreadCount >= 1'
+      - name: Stop stack and remove CI volumes
+        if: always()
+        run: docker compose down -v
 
   desktop-shell:
     name: Desktop shell syntax and configuration
