@@ -435,9 +435,16 @@ Future<void> main() async {
     if (max != null && max > 0) filter['price.amount'] = {r'$lte': max};
     final page = (int.tryParse(p['page'] ?? '1') ?? 1).clamp(1, 100000).toInt();
     final limit = (int.tryParse(p['limit'] ?? '24') ?? 24).clamp(1, 60).toInt();
+    final sortOrder = p['sort'] == 'price-low'
+      ? <String, dynamic>{'price.amount': 1, 'createdAt': -1}
+      : p['sort'] == 'price-high'
+        ? <String, dynamic>{'price.amount': -1, 'createdAt': -1}
+        : p['sort'] == 'oldest'
+          ? <String, dynamic>{'createdAt': 1}
+          : <String, dynamic>{'createdAt': -1};
     final query = page > 1
-      ? listings.modernFind(filter: filter, limit: limit, skip: (page - 1) * limit, sort: {'createdAt': -1})
-      : listings.modernFind(filter: filter, limit: limit, sort: {'createdAt': -1});
+      ? listings.modernFind(filter: filter, limit: limit, skip: (page - 1) * limit, sort: sortOrder)
+      : listings.modernFind(filter: filter, limit: limit, sort: sortOrder);
     final docs = await query.toList();
     final items = docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList();
     final total = await listings.count(filter);
