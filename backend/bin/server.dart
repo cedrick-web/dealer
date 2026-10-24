@@ -1050,36 +1050,3 @@ Future<void> main() async {
   final server = await io.serve(handler, InternetAddress.anyIPv4, port);
   stdout.writeln('KOMISIYONERI API listening on ' + server.port.toString());
 }
-).hasMatch(email) || password.length < 10 || utf8.encode(password).length > 72) {
-      return reply(422, {'error': 'Enter your name, a valid email, and a password of 10–72 UTF-8 bytes.'});
-    }
-    if (await users.findOne(where.eq('email', email)) != null) return reply(409, {'error': 'An account with that email already exists.'});
-    final person = {
-      'publicId': uid.v4(), 'name': name, 'email': email, 'phone': phone,
-      'passwordHash': BCrypt.hashpw(password, BCrypt.gensalt()), 'role': 'member',
-      'status': 'active', 'createdAt': now(),
-    };
-    await users.insertOne(person);
-    final token = issueToken({'sub': person['publicId'], 'email': email, 'role': 'member', 'exp': DateTime.now().millisecondsSinceEpoch ~/ 1000 + 60 * 60 * 8});
-    return reply(201, {'token': token, 'user': publicDoc(person), 'expiresIn': 28800});
-  });
-  final handler = Pipeline().addMiddleware(logRequests()).addMiddleware((inner) => (req) async {
-    if (req.method == 'OPTIONS') return Response(204, headers: {
-      'access-control-allow-origin': webOrigin,
-      'access-control-allow-methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-      'access-control-allow-headers': 'Origin, Content-Type, Accept, Authorization',
-      'access-control-max-age': '600',
-      'vary': 'Origin',
-    });
-    final res = await inner(req);
-    return res.change(headers: {
-      'access-control-allow-origin': webOrigin,
-      'access-control-allow-methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-      'access-control-allow-headers': 'Origin, Content-Type, Accept, Authorization',
-      'vary': 'Origin', 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY',
-      'referrer-policy': 'no-referrer', 'cache-control': 'no-store',
-    });
-  }).addHandler(r.call);
-  final server = await io.serve(handler, InternetAddress.anyIPv4, port);
-  stdout.writeln('KOMISIYONERI API listening on ' + server.port.toString());
-}
