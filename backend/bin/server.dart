@@ -301,7 +301,7 @@ Future<void> main() async {
   r.get('/api/v1/me/notifications', (Request q) async {
     final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final p = q.url.queryParameters;
-    final limit = (int.tryParse(p['limit'] ?? '50') ?? 50).clamp(1, 100);
+    final limit = (int.tryParse(p['limit'] ?? '50') ?? 50).clamp(1, 100).toInt();
     final docs = await notifications.find(where.eq('userId', c['sub']), limit: limit, sort: {'createdAt': -1}).toList();
     final unread = await notifications.count(where.eq('userId', c['sub']).eq('readAt', null));
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList(), 'unreadCount': unread});
@@ -433,8 +433,8 @@ Future<void> main() async {
     }
     final max = int.tryParse(p['maxPrice'] ?? '');
     if (max != null && max > 0) filter['price.amount'] = {'$lte': max};
-    final page = (int.tryParse(p['page'] ?? '1') ?? 1).clamp(1, 100000);
-    final limit = (int.tryParse(p['limit'] ?? '24') ?? 24).clamp(1, 60);
+    final page = (int.tryParse(p['page'] ?? '1') ?? 1).clamp(1, 100000).toInt();
+    final limit = (int.tryParse(p['limit'] ?? '24') ?? 24).clamp(1, 60).toInt();
     final docs = await listings.find(filter, limit: limit, skip: (page - 1) * limit, sort: {'createdAt': -1}).toList();
     final items = docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList();
     final total = await listings.count(filter);
