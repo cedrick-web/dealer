@@ -366,8 +366,9 @@ Future<void> main() async {
     final listing = asMap(await listings.findOne(where.eq('publicId', listingId)));
     if (listing == null) return reply(404, {'error': 'Property not found.'});
     final isOwner = listing['ownerId'] == c['sub'];
+    final isAdmin = c['role'] == 'admin';
     final inDeal = await deals.findOne(where.eq('listingId', listingId).eq('participants', c['sub'])) != null;
-    if (!isOwner && !inDeal) return reply(403, {'error': 'Only the listing owner or a deal participant can view document metadata.'});
+    if (!isOwner && !isAdmin && !inDeal) return reply(403, {'error': 'Only the listing owner, an administrator reviewer or a deal participant can view document metadata.'});
     final docs = await documents.find(where.eq('listingId', listingId), sort: {'createdAt': -1}).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
@@ -409,8 +410,9 @@ Future<void> main() async {
     final listing = asMap(await listings.findOne(where.eq('publicId', doc['listingId'])));
     final owner = listing?['ownerId'] == c['sub'];
     final uploader = doc['uploadedBy'] == c['sub'];
+    final isAdmin = c['role'] == 'admin';
     final inDeal = await deals.findOne(where.eq('listingId', doc['listingId']).eq('participants', c['sub'])) != null;
-    if (!owner && !uploader && !inDeal) return reply(403, {'error': 'You are not authorized to download this document.'});
+    if (!owner && !uploader && !isAdmin && !inDeal) return reply(403, {'error': 'You are not authorized to download this document.'});
     final file = File(doc['filePath'] as String);
     if (!await file.exists()) return reply(410, {'error': 'The private document file is no longer available.'});
     return Response.ok(await file.readAsBytes(), headers: {
