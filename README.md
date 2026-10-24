@@ -47,7 +47,8 @@ The repository is named **dealer** and the interface is currently branded **Deal
 ### Administrative workspace
 - Public registration cannot create an administrator account.
 - Optional environment-based bootstrap creates the first administrator if the configured email is not already present.
-- Authenticated administrators can inspect the pending-review queue and approve, reject or request changes to a listing with a note.
+- Users can submit an agent profile with service districts, experience, professional bio and explicit public-phone consent. Only approved agent profiles appear in the public agent directory.
+- Authenticated administrators can inspect pending property listings and agent applications, approve, reject or request changes with a note. Agent approval grants the in-platform `agent` role only; it is not a government licence or legal qualification.
 
 ### Important limits
 - Listing review is an internal moderation step, **not a land-title verification or legal ownership guarantee**.
@@ -100,6 +101,7 @@ The repository is named **dealer** and the interface is currently branded **Deal
     │   │   └── sw.js
     │   ├── Dockerfile               # Optimized static web build
     │   └── nginx.conf               # SPA fallback and response headers
+    ├── .github/workflows/quality.yml # Frontend build and Dart analysis
     ├── .env.example                 # Environment template; no production secrets
     ├── docker-compose.yml           # Local multi-container stack
     └── README.md
@@ -281,6 +283,7 @@ JSON errors use an error field and an appropriate HTTP status. Protected endpoin
 | GET | /api/v1/districts | Public | District catalogue |
 | GET | /api/v1/listings | Public | Published property search; supports district, type, purpose, maxPrice, page and limit |
 | GET | /api/v1/listings/:id | Public | Published property detail |
+| GET | /api/v1/agents | Public | Approved agent directory; phone appears only with explicit consent |
 | GET | /api/v1/trust/verify/:hash | Public | Check if a digest exists in the audit log |
 
 Example listing search:
@@ -310,7 +313,11 @@ Registration body:
 |---|---|---|---|
 | POST | /api/v1/listings | Bearer | Submit a listing into pending_review |
 | GET | /api/v1/me/listings | Bearer | Current user's listing submissions |
-| GET | /api/v1/admin/listings/pending | Admin | Review queue |
+| GET | /api/v1/admin/listings/pending | Admin | Property review queue |
+| GET | /api/v1/me/agent-profile | Bearer | Read the current user's latest agent application |
+| POST | /api/v1/agents/apply | Bearer | Submit a profile for agent review |
+| GET | /api/v1/admin/agents/pending | Admin | Agent application review queue |
+| PATCH | /api/v1/admin/agents/:id/review | Admin | Approve, reject or request changes to an agent application |
 | PATCH | /api/v1/admin/listings/:id/review | Admin | Approve, reject or request changes |
 
 Listing submission body example:
@@ -398,6 +405,7 @@ MongoDB collections created by the API:
 | messages | conversationId, senderId, text, createdAt | Read/write authorization checks |
 | deals | participants, commissionPercent, commissionTerms, feeAcceptedBy, stage, history | Application workflow and acknowledgement |
 | documents | publicId, listingId, uploadedBy, fileName, contentType, sizeBytes, filePath | filePath is removed from API responses |
+| agent_applications | publicId, userId, name, phone, showPhone, bio, districts, experienceYears, status | Human-reviewed agent profiles; public directory only includes approved profiles |
 | audit_events | eventId, type, subjectId, actorId, evidenceHash, createdAt | Event trail and content digest lookup |
 
 Database indexes and retention policies should be explicitly configured and tested before large-scale deployment. The current build does not promise that the audit collection is immutable against a database administrator.
@@ -495,7 +503,7 @@ Before a public launch, add HTTPS end-to-end, credential rate limits and lockout
 - [ ] Add automated Dart unit and API integration tests using a disposable MongoDB database.
 - [ ] Add frontend component tests, keyboard-navigation tests and responsive browser tests.
 - [ ] Add API rate limits, account verification, password reset and revocable sessions.
-- [ ] Add verified-agent onboarding, identity-check state and auditable review checklists.
+- [ ] Extend agent onboarding with evidence-backed identity checks, professional references and auditable reviewer checklists before making any regulated qualification claims.
 - [ ] Add signed contracts, consent versioning, downloadable receipts and dispute resolution designed with a legal professional.
 - [ ] Add managed private object storage, antivirus/malware scanning, data retention and recovery procedures.
 - [ ] Add real payment-provider integration only after reviewing applicable licensing and regulatory requirements; do not implement an unlicensed escrow.
