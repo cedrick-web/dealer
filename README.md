@@ -442,7 +442,7 @@ Vite will display the local development URL. In development the app is served wi
     docker compose config
     docker compose up --build
 
-Run these checks after each substantial change. No CI result is implied by this documentation; review the actual build or workflow output for the current commit.
+Run these checks after each substantial change. The GitHub Actions workflow at .github/workflows/quality.yml runs the frontend production build and Dart static analysis on pushes and pull requests to main. Check the Actions tab for the actual result of the latest run; a committed workflow is not proof that a build passed.
 
 ## Checks and troubleshooting
 
@@ -499,7 +499,7 @@ Before a public launch, add HTTPS end-to-end, credential rate limits and lockout
 - [ ] Add signed contracts, consent versioning, downloadable receipts and dispute resolution designed with a legal professional.
 - [ ] Add managed private object storage, antivirus/malware scanning, data retention and recovery procedures.
 - [ ] Add real payment-provider integration only after reviewing applicable licensing and regulatory requirements; do not implement an unlicensed escrow.
-- [ ] Add observability, alerts, backups, restore drills and CI pipelines.
+- [ ] Extend CI with automated integration tests, browser tests and container vulnerability scanning; add observability, alerts, backups and restore drills.
 - [ ] Complete a privacy impact assessment and threat model for property documents and private messages.
 - [ ] Confirm product naming and trademark rights before marketing.
 - [ ] If blockchain anchoring remains required, design an auditable chain adapter, publish the contract address and source verification process, and document what is anchored and what is deliberately not stored on-chain. Never publish personal documents or identifying data directly on-chain.
