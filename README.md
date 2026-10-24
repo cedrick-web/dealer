@@ -490,7 +490,7 @@ Database indexes and retention policies should be explicitly configured and test
 
 ## Development without Docker
 
-These steps assume Dart SDK 3.x, Node.js 22+ and a reachable MongoDB database.
+These steps assume Dart SDK 3.7+, Node.js 22+ and a reachable MongoDB database.
 
 ### Backend
 
