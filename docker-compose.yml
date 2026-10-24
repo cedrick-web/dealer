@@ -3,30 +3,47 @@ services:
     image: mongo:8
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-dealer_admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env}
-      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-komisiyoneri}
-    volumes: [mongo_data:/data/db]
+      MONGO_INITDB_ROOT_USERNAME: \${MONGO_ROOT_USERNAME:-dealer_admin}
+      MONGO_INITDB_ROOT_PASSWORD: \${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env}
+      MONGO_INITDB_DATABASE: \${MONGO_DATABASE:-dealer}
+    volumes:
+      - mongo_data:/data/db
     networks: [private]
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')", "--username", "${MONGO_ROOT_USERNAME:-dealer_admin}", "--password", "${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin"]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')", "--username", "\${MONGO_ROOT_USERNAME:-dealer_admin}", "--password", "\${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin"]
       interval: 10s
       timeout: 5s
-      retries: 8
+      retries: 10
   api:
     build: ./backend
+    restart: unless-stopped
     environment:
       API_PORT: 8080
-      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME:-dealer_admin}:${MONGO_ROOT_PASSWORD}@mongo:27017/${MONGO_DATABASE:-komisiyoneri}?authSource=admin
-    ports: ["8080:8080"]
+      MONGO_URI: mongodb://\${MONGO_ROOT_USERNAME:-dealer_admin}:\${MONGO_ROOT_PASSWORD}@mongo:27017/\${MONGO_DATABASE:-dealer}?authSource=admin
+      JWT_SECRET: \${JWT_SECRET:?Set JWT_SECRET in .env}
+      WEB_ORIGIN: \${WEB_ORIGIN:-http://localhost:5173}
+      BOOTSTRAP_ADMIN_EMAIL: \${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_PASSWORD: \${BOOTSTRAP_ADMIN_PASSWORD:-}
+      DOCUMENT_STORAGE: /data/private-documents
+    ports:
+      - "8080:8080"
+    volumes:
+      - private_documents:/data/private-documents
     depends_on:
-      mongo: {condition: service_healthy}
+      mongo:
+        condition: service_healthy
     networks: [private]
   frontend:
-    build: ./frontend
-    ports: ["5173:5173"]
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: \${VITE_API_URL:-http://localhost:8080}
+    restart: unless-stopped
+    ports:
+      - "5173:80"
     depends_on: [api]
 networks:
   private: {}
 volumes:
   mongo_data: {}
+  private_documents: {}
