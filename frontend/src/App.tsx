@@ -31,10 +31,16 @@ function EmptyState({icon:Icon=Search,title,body,action,button}:{icon?:any;title
   return <div className="empty-state"><span className="empty-icon"><Icon size={24}/></span><h3>{title}</h3><p>{body}</p>{action&&button&&<button className="btn btn-primary" onClick={action}>{button}<ArrowRight size={16}/></button>}</div>;
 }
 function PropertyImage({item,variant='card',onClick}:{item:Listing;variant?:'card'|'modal';onClick?:()=>void}) {
-  const uploaded=item.images?.[0];
-  const [src,setSrc]=useState(uploaded&&item.status==='published'?api.listingImageUrl(uploaded.publicId):photoFor(item));
-  const [hasUploaded,setHasUploaded]=useState(Boolean(uploaded&&item.status==='published'));
+  const images=item.images||[];
+  const photoIndex=Math.min((item as Listing & {photoIndex?:number}).photoIndex||0,Math.max(0,images.length-1));
+  const selectedImage=images[photoIndex];
+  const [src,setSrc]=useState(selectedImage&&item.status==='published'?api.listingImageUrl(selectedImage.publicId):photoFor(item));
+  const [hasUploaded,setHasUploaded]=useState(Boolean(selectedImage&&item.status==='published'));
   const [loadError,setLoadError]=useState(false);
+  const [activeIndex,setActiveIndex]=useState(0);
+  useEffect(()=>{setActiveIndex(0)},[item.publicId]);
+  const currentIndex=Math.min(activeIndex,Math.max(0,images.length-1));
+  const uploaded=images[currentIndex];
   useEffect(()=>{
     let active=true;
     let objectUrl:string|undefined;
@@ -58,14 +64,19 @@ function PropertyImage({item,variant='card',onClick}:{item:Listing;variant?:'car
     }).catch(()=>{if(active){setLoadError(true);setHasUploaded(false)}});
     return ()=>{active=false;if(objectUrl)URL.revokeObjectURL(objectUrl)};
   },[item.publicId,item.status,uploaded?.publicId]);
+  const movePhoto=(delta:number)=>setActiveIndex(index=>images.length?(index+delta+images.length)%images.length:0);
   const content=<>
     {variant==='card'&&<span className="listing-badge">{item.purpose==='sale'?'FOR SALE':'FOR RENT'}</span>}
     <span className={'photo-proof-tag '+(hasUploaded?'photo-proof-real':'photo-proof-illustration')}>{hasUploaded?(uploaded?.alt||'Seller-uploaded property photo'):'Illustrative image · not the actual property'}</span>
     {variant==='card'&&<span className="photo-location"><MapPin size={13}/>{item.location.sector ? item.location.sector+', ':''}{item.location.district}</span>}
+    {images.length>1&&<span className="photo-count-tag">{currentIndex+1} / {images.length} photos</span>}
     {loadError&&<span className="photo-load-warning">Uploaded photo unavailable</span>}
   </>;
   if(variant==='card')return <button type="button" className="listing-photo" style={{backgroundImage:'url('+src+')'}} onClick={onClick} aria-label={'Open '+item.title}>{content}</button>;
-  return <div className="modal-photo" role="img" aria-label={uploaded?.alt||('Property image for '+item.title)} style={{backgroundImage:'url('+src+')'}}>{content}</div>;
+  return <div className="modal-photo" role="img" aria-label={uploaded?.alt||('Property image for '+item.title)} style={{backgroundImage:'url('+src+')'}}>
+    {content}
+    {images.length>1&&<div className="modal-gallery-controls"><button type="button" onClick={()=>movePhoto(-1)} aria-label="Previous property photo"><ArrowLeft size={17}/></button><span>{currentIndex+1} of {images.length}</span><button type="button" onClick={()=>movePhoto(1)} aria-label="Next property photo"><ArrowRight size={17}/></button></div>}
+  </div>;
 }
 
 function PrivateListingImage({image}:{image:ListingImage}) {
