@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, MotionConfig, motion } from 'motion/react';
+import { AnimatePresence, MotionConfig } from 'motion/react';
 import { PageTransition } from '@/components/app/page-transition';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ListingCard, PrivateListingImage, PropertyImage } from '@/components/app/property-cards';
+import { money, photoFor, prettyStage } from '@/lib/property-format';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -25,18 +27,11 @@ import { api, type Agent, type AgentApplication, type AppNotification, type Conv
 
 type View = 'discover'|'agents'|'agent-application'|'agent-review'|'notifications'|'dashboard'|'enquiries'|'new-listing'|'my-listings'|'saved'|'messages'|'deals'|'trust'|'account'|'admin';
 type AuthMode = 'login'|'register';
-const money = (amount:number) => new Intl.NumberFormat('en-RW',{style:'currency',currency:'RWF',maximumFractionDigits:0}).format(amount || 0);
 const dateLabel = (value?:string) => value ? new Date(value).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}) : 'Not recorded';
 const stages = ['proposed','viewing','offer','due_diligence','agreement','completed','cancelled'];
 const dealTransitions:Record<string,string[]> = {proposed:['viewing','cancelled'],viewing:['offer','cancelled'],offer:['due_diligence','agreement','cancelled'],due_diligence:['agreement','cancelled'],agreement:['completed','cancelled'],completed:[],cancelled:[]};
 const nextDealStages = (stage:string) => dealTransitions[stage] || [];
-const imageIds = ['photo-1600596542815-ffad4c1539a9','photo-1600607687939-ce8a6c25118c','photo-1600607687920-4e2a09cf159d','photo-1600566753086-00f18fb6b3ea','photo-1500382017468-9049fed747ef','photo-1511818966892-d7d671e672a2'];
-const photoFor = (listing:Listing) => {
-  const type = listing.propertyType;
-  const id = type==='land' ? imageIds[4] : type==='apartment' ? imageIds[1] : type==='commercial' ? imageIds[5] : imageIds[0];
-  return 'https://images.unsplash.com/' + id + '?auto=format&fit=crop&w=1000&q=82';
-};
-const prettyStage = (value:string) => value.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
+
 
 function ErrorNote({text,onClose}:{text:string;onClose:()=>void}) {
   if(!text) return null;
@@ -45,86 +40,6 @@ function ErrorNote({text,onClose}:{text:string;onClose:()=>void}) {
 function EmptyState({icon:Icon=Search,title,body,action,button}:{icon?:any;title:string;body:string;action?:()=>void;button?:string}) {
   return <div className="empty-state"><span className="empty-icon"><Icon size={24}/></span><h3>{title}</h3><p>{body}</p>{action&&button&&<button className="btn btn-primary" onClick={action}>{button}<ArrowRight size={16}/></button>}</div>;
 }
-function PropertyImage({item,variant='card',onClick}:{item:Listing;variant?:'card'|'modal';onClick?:()=>void}) {
-  const images=item.images||[];
-  const firstImage=images[0];
-  const [src,setSrc]=useState(firstImage&&item.status==='published'?api.listingImageUrl(firstImage.publicId):photoFor(item));
-  const [hasUploaded,setHasUploaded]=useState(Boolean(firstImage&&item.status==='published'));
-  const [loadError,setLoadError]=useState(false);
-  const [activeIndex,setActiveIndex]=useState(0);
-  useEffect(()=>{setActiveIndex(0)},[item.publicId]);
-  const currentIndex=Math.min(activeIndex,Math.max(0,images.length-1));
-  const uploaded=images[currentIndex];
-  useEffect(()=>{
-    let active=true;
-    let objectUrl:string|undefined;
-    setLoadError(false);
-    if(!uploaded){
-      setSrc(photoFor(item));
-      setHasUploaded(false);
-      return ()=>{active=false};
-    }
-    if(item.status==='published'){
-      setSrc(api.listingImageUrl(uploaded.publicId));
-      setHasUploaded(true);
-      return ()=>{active=false};
-    }
-    setSrc(photoFor(item));
-    setHasUploaded(false);
-    api.loadListingImage(uploaded.publicId).then(url=>{
-      objectUrl=url;
-      if(active){setSrc(url);setHasUploaded(true)}
-      else URL.revokeObjectURL(url);
-    }).catch(()=>{if(active){setLoadError(true);setHasUploaded(false)}});
-    return ()=>{active=false;if(objectUrl)URL.revokeObjectURL(objectUrl)};
-  },[item.publicId,item.status,uploaded?.publicId]);
-  const movePhoto=(delta:number)=>setActiveIndex(index=>images.length?(index+delta+images.length)%images.length:0);
-  const content=<>
-    {variant==='card'&&<span className="listing-badge">{item.purpose==='sale'?'FOR SALE':'FOR RENT'}</span>}
-    <span className={'photo-proof-tag '+(hasUploaded?'photo-proof-real':'photo-proof-illustration')}>{hasUploaded?(uploaded?.alt||'Seller-uploaded property photo'):'Illustrative image · not the actual property'}</span>
-    {variant==='card'&&<span className="photo-location"><MapPin size={13}/>{item.location.sector ? item.location.sector+', ':''}{item.location.district}</span>}
-    {images.length>1&&<span className="photo-count-tag">{currentIndex+1} / {images.length} photos</span>}
-    {loadError&&<span className="photo-load-warning">Uploaded photo unavailable</span>}
-  </>;
-  if(variant==='card')return <button type="button" className="listing-photo" style={{backgroundImage:'url('+src+')'}} onClick={onClick} aria-label={'Open '+item.title}>{content}</button>;
-  return <div className="modal-photo" role="group" aria-label={uploaded?.alt||('Property image for '+item.title)} style={{backgroundImage:'url('+src+')'}}>
-    {content}
-    {images.length>1&&<div className="modal-gallery-controls"><button type="button" onClick={()=>movePhoto(-1)} aria-label="Previous property photo"><ArrowLeft size={17}/></button><span>{currentIndex+1} of {images.length}</span><button type="button" onClick={()=>movePhoto(1)} aria-label="Next property photo"><ArrowRight size={17}/></button></div>}
-  </div>;
-}
-
-function PrivateListingImage({image}:{image:ListingImage}) {
-  const [src,setSrc]=useState('');
-  const [failed,setFailed]=useState(false);
-  useEffect(()=>{
-    let active=true;
-    let objectUrl:string|undefined;
-    setFailed(false);
-    api.loadListingImage(image.publicId).then(url=>{
-      objectUrl=url;
-      if(active)setSrc(url);else URL.revokeObjectURL(url);
-    }).catch(()=>{if(active)setFailed(true)});
-    return ()=>{active=false;if(objectUrl)URL.revokeObjectURL(objectUrl)};
-  },[image.publicId]);
-  if(failed)return <div className="private-image-error"><CircleAlert size={17}/>Photo preview unavailable</div>;
-  if(!src)return <div className="private-image-loading"><RefreshCw size={15}/>Loading photo…</div>;
-  return <img className="photo-thumb-image" src={src} alt={image.alt||'Uploaded property photo'}/>;
-}
-
-function ListingCard({item,saved,onSave,onOpen,showSave=true}:{item:Listing;saved:boolean;onSave:()=>void;onOpen:()=>void;showSave?:boolean}) {
-  return <motion.article className="listing-card" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} whileHover={{y:-3,boxShadow:'0 16px 36px rgba(20,48,34,.10)'}} transition={{duration:.18,ease:'easeOut'}}>
-    <PropertyImage item={item} onClick={onOpen}/>
-    {showSave&&<button className={'favorite-float '+(saved?'is-saved':'')} onClick={onSave} aria-label={saved?'Remove saved property':'Save property'}><Heart size={18} fill={saved?'currentColor':'none'}/></button>}
-    <div className="listing-content">
-      <div className="listing-type">{item.propertyType} <span>·</span> Rwanda</div>
-      <button className="listing-title" onClick={onOpen}>{item.title}</button>
-      <p className="listing-description">{item.description}</p>
-      <div className="listing-price-row"><strong>{money(item.price.amount)}</strong>{item.purpose==='rent'&&<span>/ month</span>}<button className="icon-button" onClick={onOpen} aria-label="View property"><ArrowUpRight size={18}/></button></div>
-      <div className="listing-trust"><ShieldCheck size={15}/><span>{item.status==='published'?'Moderation approved':'Review pending'}</span><small>{item.status==='published'?'Published listing':'Status pending'}</small></div>
-    </div>
-  </motion.article>;
-}
-
 export default function App() {
   const [view,setView] = useState<View>('discover');
   const [returnView,setReturnView] = useState<View>('dashboard');
