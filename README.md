@@ -55,8 +55,9 @@ The repository is named **dealer** and the interface is currently branded **Deal
 - The document endpoint checks file size, allowed MIME type and basic file signatures, but does not scan for malware. Do not use it for real national IDs, title documents or contracts until production-grade storage, scanning, retention and access controls have been reviewed.
 - The commission workspace records proposed terms and acknowledgements. It does not create a legally vetted agreement, hold money, run escrow or execute a payment.
 - Evidence is hashed and logged in MongoDB. A hash can establish that a particular byte sequence matches a recorded digest; it cannot prove that a document is genuine or that the property belongs to the person who uploaded it.
+- The in-app agent directory and application review flow are implemented; identity checking, professional references and proof of regulated qualifications remain future work.
 - The Solidity/blockchain integration is **not deployed or wired into the running application**. Do not describe current evidence records as blockchain-verified.
-- The PWA can be installed from a supported browser. This repository does not yet ship signed native Android APK/AAB, iOS, Windows, macOS or Linux binaries.
+- The mobile PWA can be installed from a supported browser. An Electron packaging path is provided for Windows, macOS and Linux desktop builds, but this repository does not yet ship prebuilt or signed installer artifacts, nor native Android APK/AAB or iOS App Store packages.
 
 ## Architecture
 
@@ -101,6 +102,9 @@ The repository is named **dealer** and the interface is currently branded **Deal
     │   │   └── sw.js
     │   ├── Dockerfile               # Optimized static web build
     │   └── nginx.conf               # SPA fallback and response headers
+    ├── desktop/
+    │   ├── main.cjs                 # Secure Electron shell
+    │   └── package.json             # Desktop installer targets
     ├── .github/workflows/quality.yml # Frontend build and Dart analysis
     ├── .env.example                 # Environment template; no production secrets
     ├── docker-compose.yml           # Local multi-container stack
@@ -220,6 +224,51 @@ This project includes PWA metadata and a service worker. With the app served ove
 The service worker caches a limited app shell and static assets. **API data is intentionally not cached** because private conversations, deal records and property evidence must not be exposed to an offline shared-device cache. Offline mode does not allow messaging, listing creation, file upload or deal updates.
 
 For reliable PWA installation in production, deploy via HTTPS and check browser dev tools for manifest and service-worker errors. This is an installable web app, not a native package or app-store release.
+
+## Build the desktop app
+
+The desktop directory contains an Electron shell that loads the same production React build. The renderer runs with Node integration disabled, context isolation enabled and Chromium sandboxing enabled. External HTTPS links are handed to the system browser instead of being opened inside an unrestricted embedded page.
+
+### Windows desktop development
+
+Keep the API and MongoDB running with Docker Compose in one terminal:
+
+    docker compose up --build -d mongo api
+
+In a second terminal, start the Vite development server:
+
+    cd frontend
+    npm install
+    $env:VITE_API_URL = "http://localhost:8080"
+    npm run dev
+
+In a third PowerShell terminal, run the Electron shell:
+
+    cd desktop
+    npm install
+    $env:DEALER_DEV_URL = "http://localhost:5173"
+    npm start
+
+The desktop shell uses the same API account and listings as the browser. If the API is not running, its connection status shows offline and server-backed actions will fail with a clear message.
+
+### Build a Windows installer
+
+From the repository root, create the web build first:
+
+    cd frontend
+    npm install
+    $env:VITE_API_URL = "http://localhost:8080"
+    npm run build
+
+Then create the Electron installer:
+
+    cd ../desktop
+    npm install
+    npm run build:win
+
+The installer output is written to desktop/release/. The build bundles the static web files, not MongoDB or the Dart API. Each installed desktop client still needs to reach an API. For other users or a public release, build the frontend with the HTTPS URL of a deployed API instead of localhost; never put database credentials or JWT signing secrets in the frontend build.
+
+Build macOS DMG artifacts on a macOS build machine with npm run build:mac; build Linux AppImage artifacts on a Linux machine with npm run build:linux. Sign and notarize desktop artifacts and publish checksums before distributing them publicly. This repository supplies the packaging configuration, not prebuilt or signed installation binaries.
 
 ## Environment variables
 
