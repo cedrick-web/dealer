@@ -7,8 +7,8 @@ export type Listing = {
   purpose: 'sale'|'rent'; location: { district: string; sector?: string }; price: { amount: number; currency?: string; period?: string };
   status?: string; reviewNote?: string; reviewedBy?: string; verification?: { status: string; checks?: unknown[] }; createdAt?: string;
 };
-export type Lead = { publicId: string; listingId: string; listingTitle: string; ownerId: string; requesterId: string; type: string; message?: string; preferredAt?: string; status: string; createdAt: string };
-export type Conversation = { publicId: string; listingId: string; listingTitle: string; participants: string[]; ownerId: string; lastMessage?: string; updatedAt: string };
+export type Lead = { publicId: string; listingId: string; listingTitle: string; ownerId: string; requesterId: string; type: string; message?: string; preferredAt?: string; status: string; lastUpdatedBy?: string; createdAt: string; updatedAt?: string };
+export type Conversation = { publicId: string; listingId: string; listingTitle: string; participants: string[]; ownerId: string; counterpartyId?: string; lastMessage?: string; updatedAt: string };
 export type Message = { publicId: string; conversationId: string; senderId: string; text: string; createdAt: string };
 export type Deal = {
   publicId: string; listingId: string; listingTitle: string; participants: string[]; commissionPercent: number; commissionTerms: string;
@@ -73,8 +73,9 @@ export const api = {
   removeFavorite: (id:string) => request('/api/v1/favorites/' + encodeURIComponent(id), {method:'DELETE'}),
   createLead: (input:{listingId:string;type:'viewing'|'question'|'offer';message:string;preferredAt?:string}) => request<ApiResult<Lead>>('/api/v1/leads', json(input)),
   myLeads: () => request<ApiResult<Lead[]>>('/api/v1/me/leads'),
+  updateLeadStatus: (id:string,status:'contacted'|'accepted'|'declined'|'completed'|'cancelled') => request<{id:string;status:string;updatedAt:string}>('/api/v1/leads/' + encodeURIComponent(id) + '/status', {method:'PATCH',body:JSON.stringify({status})}),
   conversations: () => request<ApiResult<Conversation[]>>('/api/v1/me/conversations'),
-  openConversation: (listingId:string) => request<ApiResult<Conversation>>('/api/v1/conversations', json({listingId})),
+  openConversation: (listingId:string,participantId?:string) => request<ApiResult<Conversation>>('/api/v1/conversations', json({listingId,...(participantId?{participantId}:{})})),
   messages: (id:string) => request<ApiResult<Message[]>>('/api/v1/conversations/' + encodeURIComponent(id) + '/messages'),
   sendMessage: (id:string,text:string) => request<ApiResult<Message>>('/api/v1/conversations/' + encodeURIComponent(id) + '/messages', json({text})),
   deals: () => request<ApiResult<Deal[]>>('/api/v1/me/deals'),
