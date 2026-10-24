@@ -42,9 +42,9 @@ export function PropertyImage({item,variant='card',onClick}:{item:Listing;varian
   const movePhoto=(delta:number)=>setActiveIndex(index=>images.length?(index+delta+images.length)%images.length:0);
   const content=<>
     {variant==='card'&&<span className="listing-badge">{item.purpose==='sale'?'FOR SALE':'FOR RENT'}</span>}
-    <span className={'photo-proof-tag '+(hasUploaded?'photo-proof-real':'photo-proof-illustration')}>{hasUploaded?(uploaded?.alt||'Seller-uploaded property photo'):'Illustrative image · not the actual property'}</span>
+    <span className={'photo-proof-tag '+(hasUploaded?'photo-proof-real':'photo-proof-illustration')}>{variant==='mini'?(hasUploaded?'Seller photo':'Illustration'):hasUploaded?(uploaded?.alt||'Seller-uploaded property photo'):'Illustrative image · not the actual property'}</span>
     {variant==='card'&&<span className="photo-location"><MapPin size={13}/>{item.location.sector ? item.location.sector+', ':''}{item.location.district}</span>}
-    {images.length>1&&<span className="photo-count-tag">{currentIndex+1} / {images.length} photos</span>}
+    {images.length>1&&variant!=='mini'&&<span className="photo-count-tag">{currentIndex+1} / {images.length} photos</span>}
     {loadError&&<span className="photo-load-warning">Uploaded photo unavailable</span>}
   </>;
   if(variant==='card')return <button type="button" className="listing-photo" style={{backgroundImage:'url('+src+')'}} onClick={onClick} aria-label={'Open '+item.title}>{content}</button>;
