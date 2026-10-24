@@ -40,7 +40,7 @@ describe('deal workspace', () => {
 
   it('does not allow commission acknowledgement once a deal is completed', () => {
     render(<DealWorkspaceView deals={[{...deal,stage:'completed'}]} userId="buyer-1" busy={false} onAcceptFee={vi.fn()} onUpdateStage={vi.fn()} onFindProperty={vi.fn()} />);
-    expect(screen.getByRole('button',{name:/Accepted/})).toBeDisabled();
+    expect((screen.getByRole('button',{name:/Accepted/}) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText('Completed')).toBeTruthy();
   });
 });
