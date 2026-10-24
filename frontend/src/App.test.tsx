@@ -67,7 +67,7 @@ describe('Dealer application shell', () => {
     render(<App />);
     await screen.findByText('No published properties match yet');
     screen.getByRole('tab', { name: 'Rent' }).click();
-    expect(screen.getByRole('button', { name: 'Rent' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Rent' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Buy' })).toBeTruthy();
   });
 });
