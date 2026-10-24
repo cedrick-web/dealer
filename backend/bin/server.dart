@@ -547,6 +547,38 @@ Future<void> main() async {
     return reply(200, {'data': all.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
 
+  r.patch('/api/v1/leads/<id>/status', (Request q, String id) async {
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
+    final b = await readJson(q, 15 * 1024);
+    final item = asMap(await leads.findOne(where.eq('publicId', id)));
+    if (item == null) return reply(404, {'error': 'Enquiry not found.'});
+    final isOwner = item['ownerId'] == c['sub'];
+    final isRequester = item['requesterId'] == c['sub'];
+    if (!isOwner && !isRequester) return reply(403, {'error': 'Only the enquiry participants can update it.'});
+    final status = clean(b?['status'], 30);
+    final current = item['status'] as String? ?? 'open';
+    final allowed = isOwner
+      ? <String, List<String>>{
+          'open': ['contacted', 'accepted', 'declined'],
+          'contacted': ['accepted', 'declined'],
+          'accepted': ['completed'],
+        }
+      : <String, List<String>>{
+          'open': ['cancelled'],
+          'contacted': ['cancelled'],
+          'accepted': ['cancelled'],
+        };
+    if (!(allowed[current] ?? <String>[]).contains(status)) {
+      return reply(409, {'error': 'This enquiry cannot move from ' + current + ' to ' + status + ' for your role.'});
+    }
+    final at = now();
+    await leads.updateOne(where.eq('publicId', id), modify.set('status', status).set('updatedAt', at).set('lastUpdatedBy', c['sub']));
+    await audit.insertOne({'eventId': uid.v4(), 'type': 'lead.status_updated', 'subjectId': id, 'actorId': c['sub'], 'fromStatus': current, 'toStatus': status, 'createdAt': at});
+    final recipientId = isOwner ? item['requesterId']?.toString() : item['ownerId']?.toString();
+    await notifyUser(recipientId: recipientId, actorId: c['sub']?.toString(), type: 'lead_status', title: 'Enquiry status updated', body: 'Your enquiry about "' + clean(item['listingTitle'], 100) + '" is now ' + status + '.', destination: 'enquiries', subjectId: id);
+    return reply(200, {'id': id, 'status': status, 'updatedAt': at});
+  });
+
   r.get('/api/v1/me/conversations', (Request q) async {
     final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final docs = await conversations.find(where.eq('participants', c['sub']), sort: {'updatedAt': -1}).toList();
@@ -557,15 +589,43 @@ Future<void> main() async {
     final b = await readJson(q, 20 * 1024);
     if (b == null) return reply(400, {'error': 'Send a valid JSON object.'});
     final listingId = clean(b['listingId'], 80);
-    final listing = asMap(await listings.findOne(where.eq('publicId', listingId).eq('status', 'published')));
-    if (listing == null) return reply(404, {'error': 'Published property not found.'});
-    final ownerId = listing['ownerId'];
-    if (ownerId == c['sub']) return reply(422, {'error': 'You cannot start a conversation with yourself.'});
-    final found = asMap(await conversations.findOne(where.eq('listingId', listingId).eq('participants', c['sub']).eq('ownerId', ownerId)));
-    if (found != null) return reply(200, {'data': publicDoc(found)});
-    final item = {'publicId': uid.v4(), 'listingId': listingId, 'listingTitle': listing['title'], 'ownerId': ownerId, 'participants': [c['sub'], ownerId], 'createdAt': now(), 'updatedAt': now()};
+    final listing = asMap(await listings.findOne(where.eq('publicId', listingId)));
+    if (listing == null) return reply(404, {'error': 'Property not found.'});
+    final ownerId = listing['ownerId']?.toString() ?? '';
+    if (ownerId.isEmpty) return reply(409, {'error': 'This listing is not linked to an account that can receive messages.'});
+    final isOwner = ownerId == c['sub'];
+    final requestedCounterparty = clean(b['participantId'], 80);
+    if (isOwner && requestedCounterparty.isEmpty) {
+      return reply(422, {'error': 'When replying as a listing owner, provide the participant ID from a valid enquiry.'});
+    }
+    final counterpartyId = isOwner ? requestedCounterparty : c['sub']!.toString();
+    if (counterpartyId == ownerId) return reply(422, {'error': 'You cannot start a conversation with yourself.'});
+    final found = asMap(await conversations.findOne(where.eq('listingId', listingId).eq('ownerId', ownerId).eq('counterpartyId', counterpartyId)));
+    if (found != null && (found['participants'] as List? ?? []).map((value) => value.toString()).contains(c['sub'].toString())) {
+      return reply(200, {'data': publicDoc(found)});
+    }
+    if (isOwner) {
+      final relatedLead = await leads.findOne(where.eq('listingId', listingId).eq('ownerId', ownerId).eq('requesterId', counterpartyId));
+      if (relatedLead == null) return reply(403, {'error': 'You can only initiate an owner-side conversation with someone who has enquired about this listing.'});
+    } else if (listing['status'] != 'published') {
+      return reply(404, {'error': 'This property is no longer publicly available for a new conversation.'});
+    }
+    final createdAt = now();
+    final item = {
+      'publicId': uid.v4(), 'listingId': listingId, 'listingTitle': listing['title'],
+      'ownerId': ownerId, 'counterpartyId': counterpartyId,
+      'participants': [ownerId, counterpartyId], 'createdAt': createdAt, 'updatedAt': createdAt,
+    };
     await conversations.insertOne(item);
-    await notifyUser(recipientId: ownerId?.toString(), actorId: c['sub']?.toString(), type: 'conversation', title: 'New property conversation', body: 'A buyer started a conversation about "' + clean(listing['title'], 100) + '".', destination: 'messages', subjectId: item['publicId']?.toString());
+    await notifyUser(
+      recipientId: counterpartyId == c['sub'] ? ownerId : counterpartyId,
+      actorId: c['sub']?.toString(),
+      type: 'conversation',
+      title: 'New property conversation',
+      body: (isOwner ? 'A property owner opened a conversation about "' : 'A buyer started a conversation about "') + clean(listing['title'], 100) + '".',
+      destination: 'messages',
+      subjectId: item['publicId']?.toString(),
+    );
     return reply(201, {'data': publicDoc(item)});
   });
   r.get('/api/v1/conversations/<id>/messages', (Request q, String id) async {
