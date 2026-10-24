@@ -432,7 +432,7 @@ Future<void> main() async {
       ];
     }
     final max = int.tryParse(p['maxPrice'] ?? '');
-    if (max != null && max > 0) filter['price.amount'] = {'$lte': max};
+    if (max != null && max > 0) filter['price.amount'] = {r'$lte': max};
     final page = (int.tryParse(p['page'] ?? '1') ?? 1).clamp(1, 100000).toInt();
     final limit = (int.tryParse(p['limit'] ?? '24') ?? 24).clamp(1, 60).toInt();
     final docs = await listings.modernFind(filter: filter, limit: limit, skip: (page - 1) * limit, sort: {'createdAt': -1}).toList();
