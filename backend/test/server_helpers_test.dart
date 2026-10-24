@@ -12,6 +12,40 @@ void main() {
       expect(server.clean(123), '');
     });
 
+    test('file signature checks reject mismatched and truncated uploads', () {
+      expect(server.hasAllowedFileSignature('application/pdf', [37, 80, 68, 70]), isTrue);
+      expect(server.hasAllowedFileSignature('application/pdf', [37, 80, 68]), isFalse);
+      expect(server.hasAllowedFileSignature('image/jpeg', [255, 216, 255, 0]), isTrue);
+      expect(server.hasAllowedFileSignature('image/png', [137, 80, 78, 71, 13, 10, 26, 10]), isTrue);
+      expect(server.hasAllowedFileSignature('image/png', [137, 80, 78, 71, 0, 0, 0, 0]), isFalse);
+      expect(server.hasAllowedFileSignature('image/webp', [82, 73, 70, 70, 0, 0, 0, 0, 87, 69, 66, 80]), isTrue);
+      expect(server.hasAllowedFileSignature('image/svg+xml', [60, 115, 118, 103]), isFalse);
+    });
+
+    test('JSON parser rejects oversized declared and chunked bodies', () async {
+      final declaredLarge = Request(
+        'POST',
+        Uri.parse('http://localhost/api/test'),
+        headers: {'content-length': '100'},
+        body: '{"a":1}',
+      );
+      expect(await server.readJson(declaredLarge, 10), isNull);
+
+      final chunkedLarge = Request(
+        'POST',
+        Uri.parse('http://localhost/api/test'),
+        body: '{"description":"this body is deliberately too long"}',
+      );
+      expect(await server.readJson(chunkedLarge, 12), isNull);
+
+      final valid = Request(
+        'POST',
+        Uri.parse('http://localhost/api/test'),
+        body: '{"ok":true}',
+      );
+      expect(await server.readJson(valid, 30), {'ok': true});
+    });
+
     test('listing category validators allow only supported values', () {
       expect(server.validType('house'), 'house');
       expect(server.validType('land'), 'land');
