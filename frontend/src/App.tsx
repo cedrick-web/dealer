@@ -6,9 +6,9 @@ import {
   LogOut, MapPin, Menu, MessageCircle, MoreHorizontal, Plus, RefreshCw, Search, Send, Settings,
   ShieldCheck, SlidersHorizontal, Sparkles, Upload, UserCircle, Users, WalletCards, X
 } from 'lucide-react';
-import { api, type Conversation, type Deal, type EvidenceDocument, type Lead, type Listing, type Message, type User, setSessionToken } from './api';
+import { api, type Agent, type AgentApplication, type Conversation, type Deal, type EvidenceDocument, type Lead, type Listing, type Message, type User, setSessionToken } from './api';
 
-type View = 'discover'|'dashboard'|'new-listing'|'my-listings'|'saved'|'messages'|'deals'|'trust'|'account'|'admin';
+type View = 'discover'|'agents'|'agent-application'|'agent-review'|'dashboard'|'new-listing'|'my-listings'|'saved'|'messages'|'deals'|'trust'|'account'|'admin';
 type AuthMode = 'login'|'register';
 const money = (amount:number) => new Intl.NumberFormat('en-RW',{style:'currency',currency:'RWF',maximumFractionDigits:0}).format(amount || 0);
 const dateLabel = (value?:string) => value ? new Date(value).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}) : 'Not recorded';
@@ -57,6 +57,10 @@ export default function App() {
   const [messages,setMessages] = useState<Message[]>([]);
   const [deals,setDeals] = useState<Deal[]>([]);
   const [pending,setPending] = useState<Listing[]>([]);
+  const [pendingAgents,setPendingAgents] = useState<AgentApplication[]>([]);
+  const [agentDirectory,setAgentDirectory] = useState<Agent[]>([]);
+  const [agentApplication,setAgentApplication] = useState<AgentApplication|null>(null);
+  const [agentForm,setAgentForm] = useState({phone:'',bio:'',experienceYears:'0',districts:['Gasabo'],showPhone:false});
   const [docs,setDocs] = useState<EvidenceDocument[]>([]);
   const [selectedConversation,setSelectedConversation] = useState('');
   const [user,setUser] = useState<User|null>(null);
@@ -94,24 +98,31 @@ export default function App() {
   },[]);
   const refreshWorkspace = useCallback(async (activeUser:User) => {
     const safe = async <T,>(fn:()=>Promise<T>, fallback:T) => { try { return await fn(); } catch { return fallback; } };
-    const [owned,favorites,leadData,rooms,dealData] = await Promise.all([
+    const [owned,favorites,leadData,rooms,dealData,agentData] = await Promise.all([
       safe(()=>api.myListings(),{data:[] as Listing[]}),
       safe(()=>api.favorites(),{data:[] as {listingId:string;createdAt:string}[]}),
       safe(()=>api.myLeads(),{data:[] as Lead[]}),
       safe(()=>api.conversations(),{data:[] as Conversation[]}),
       safe(()=>api.deals(),{data:[] as Deal[]}),
+      safe(()=>api.myAgentProfile(),{data:null as AgentApplication|null}),
     ]);
     setMyItems(owned.data || []);
     setSavedIds((favorites.data || []).map(x=>x.listingId));
     setLeads(leadData.data || []);
     setConversations(rooms.data || []);
     setDeals(dealData.data || []);
+    setAgentApplication(agentData.data);
+    if(agentData.data) setAgentForm({phone:agentData.data.phone||'',bio:agentData.data.bio||'',experienceYears:String(agentData.data.experienceYears??0),districts:agentData.data.districts||['Gasabo'],showPhone:agentData.data.showPhone===true});
     const detailResults = await Promise.all((favorites.data || []).map(x=>safe(()=>api.listing(x.listingId),null as any)));
     setSavedItems(detailResults.filter(Boolean).map((x:any)=>x.data).filter(Boolean));
     if(activeUser.role==='admin') {
-      const adminData=await safe(()=>api.adminPending(),{data:[] as Listing[]});
+      const [adminData,agentQueue]=await Promise.all([
+        safe(()=>api.adminPending(),{data:[] as Listing[]}),
+        safe(()=>api.adminPendingAgents(),{data:[] as AgentApplication[]}),
+      ]);
       setPending(adminData.data || []);
-    } else setPending([]);
+      setPendingAgents(agentQueue.data || []);
+    } else { setPending([]); setPendingAgents([]); }
   },[]);
   const refreshMessages = useCallback(async (id:string) => {
     if(!id) { setMessages([]); return; }
@@ -122,6 +133,7 @@ export default function App() {
     let alive=true;
     api.health().then(()=>{if(alive)setApiOnline(true)}).catch(()=>{if(alive)setApiOnline(false)});
     api.districts().then(r=>{if(alive)setDistricts(r.data || [])}).catch(()=>{});
+    api.agents().then(r=>{if(alive)setAgentDirectory(r.data || [])}).catch(()=>{});
     refreshListings().catch(()=>{});
     if(localStorage.getItem('dealer.session.v1')) {
       api.me().then(async active=>{if(!alive)return;setUser(active); await refreshWorkspace(active)}).catch(()=>{if(alive){setSessionToken('');setUser(null)}});
@@ -149,7 +161,7 @@ export default function App() {
   };
   const navTo = (target:View) => {
     setMobileNav(false);
-    if(['dashboard','new-listing','my-listings','saved','messages','deals','account','admin'].includes(target) && !user) { setReturnView(target); setAuthMode('login'); setAuthOpen(true); setView(target==='new-listing'?'discover':target); return; }
+    if(['dashboard','new-listing','my-listings','saved','messages','deals','account','admin','agent-application','agent-review'].includes(target) && !user) { setReturnView(target); setAuthMode('login'); setAuthOpen(true); setView(target==='new-listing'?'discover':target); return; }
     setView(target);
   };
   const withBusy = async (job:()=>Promise<void>) => {
@@ -168,7 +180,7 @@ export default function App() {
       setView(active.role==='admin'?'admin':returnView);flash(t('Signed in securely.','Winjiye neza.'));
     });
   };
-  const signOut = () => { setSessionToken('');setUser(null);setMyItems([]);setSavedIds([]);setSavedItems([]);setLeads([]);setConversations([]);setMessages([]);setDeals([]);setView('discover');flash(t('You have signed out.','Wasohotse muri konti.')); };
+  const signOut = () => { setSessionToken('');setUser(null);setMyItems([]);setSavedIds([]);setSavedItems([]);setLeads([]);setConversations([]);setMessages([]);setDeals([]);setAgentApplication(null);setPendingAgents([]);setPending([]);setView('discover');flash(t('You have signed out.','Wasohotse muri konti.')); };
   const saveListing = (item:Listing) => {
     if(!requireUser()) return;
     void withBusy(async()=>{
@@ -176,6 +188,26 @@ export default function App() {
       else {await api.saveFavorite(item.publicId);setSavedIds(s=>[...s,item.publicId]);setSavedItems(s=>[item,...s]);flash(t('Property saved to your account.','Umutungo wabitswe muri konti.'))}
     });
   };
+  const submitAgentApplication = (event:FormEvent) => {
+    event.preventDefault();
+    if(!requireUser('agent-application')) return;
+    void withBusy(async()=>{
+      const result=await api.applyForAgent({
+        phone:agentForm.phone,bio:agentForm.bio,experienceYears:Number(agentForm.experienceYears),
+        districts:agentForm.districts,showPhone:agentForm.showPhone,
+      });
+      setAgentApplication(result.data);
+      await refreshWorkspace(user!);
+      setView('agent-application');
+      flash(result.message);
+    });
+  };
+  const reviewAgent = (item:AgentApplication,decision:'approve'|'reject'|'request_changes') => void withBusy(async()=>{
+    await api.adminReviewAgent(item.publicId,decision,reviewNotes[item.publicId]||'');
+    const [queue,listingQueue]=await Promise.all([api.adminPendingAgents(),api.adminPending()]);
+    setPendingAgents(queue.data||[]);setPending(listingQueue.data||[]);
+    flash('Agent application decision recorded: '+decision+'.');
+  });
   const submitListing = (event:FormEvent) => {
     event.preventDefault();if(!requireUser())return;
     void withBusy(async()=>{
@@ -230,18 +262,23 @@ export default function App() {
 
   const navigation:{id:View;label:string;icon:any;group:string}[]=[
     {id:'discover',label:t('Discover property','Gushaka umutungo'),icon:Search,group:'Marketplace'},
+    {id:'agents',label:t('Agent directory','Abahuza'),icon:Users,group:'Marketplace'},
     {id:'dashboard',label:t('Overview','Incamake'),icon:LayoutDashboard,group:'Workspace'},
     {id:'new-listing',label:t('Create listing','Shyiraho umutungo'),icon:FilePlus2,group:'Workspace'},
+    {id:'agent-application',label:t('Become an agent','Ba umuhuza'),icon:BadgeCheck,group:'Workspace'},
     {id:'my-listings',label:t('My listings','Imitungo yanjye'),icon:Building2,group:'Workspace'},
     {id:'saved',label:t('Saved properties','Ibyabitswe'),icon:Heart,group:'Workspace'},
     {id:'messages',label:t('Messages','Ubutumwa'),icon:MessageCircle,group:'Workspace'},
     {id:'deals',label:t('Deals & fees','Amasezerano'),icon:WalletCards,group:'Workspace'},
     {id:'trust',label:t('Evidence checker','Igenzura ry’inyandiko'),icon:ShieldCheck,group:'Tools'},
-    ...(user?.role==='admin'?[{id:'admin' as View,label:t('Review queue','Igenzura'),icon:ClipboardList,group:'Administration'}]:[]),
+    ...(user?.role==='admin'?[{id:'admin' as View,label:t('Review queue','Igenzura'),icon:ClipboardList,group:'Administration'},{id:'agent-review' as View,label:t('Agent applications','Abahuza bashya'),icon:Users,group:'Administration'}]:[]),
     {id:'account',label:t('Account settings','Konti'),icon:Settings,group:'Account'},
   ];
   const heading:{[key in View]:{title:string;subtitle:string}}={
     discover:{title:t('Find a property with a clearer record.','Shaka umutungo ufite amakuru asobanutse.'),subtitle:t('Explore public listings, compare options and ask questions before making commitments.','Reba amatangazo rusange kandi ubaze mbere yo kwiyemeza.')},
+    agents:{title:t('Meet reviewed property agents','Abahuza bemejwe'),subtitle:t('Explore agent profiles, service areas and experience. Public contact details appear only with the agent’s consent.')},
+    'agent-application':{title:t('Become a property agent','Ba umuhuza w’imitungo'),subtitle:t('Submit a professional profile for human review. Approval is required before the profile becomes public.')},
+    'agent-review':{title:t('Agent application review','Igenzura ry’abahuza'),subtitle:t('Review applicant experience, service districts and contact consent before approving a public profile.')},
     dashboard:{title:t('Your property workspace','Ahantu hakurikirana imitungo yawe'),subtitle:t('Keep your listings, conversations, viewing requests and deal milestones in one place.')},
     'new-listing':{title:t('Create a property listing','Shyiraho itangazo ry’umutungo'),subtitle:t('Submissions stay private until the review team approves them.')},
     'my-listings':{title:t('Your listings','Amatangazo yawe'),subtitle:t('See review status and continue preparing the evidence for every property.')},
@@ -251,6 +288,7 @@ export default function App() {
     trust:{title:t('Evidence hash checker','Igenzura ry’ibimenyetso'),subtitle:t('Check whether this platform recorded a particular content digest. It cannot validate legal ownership.')},
     account:{title:t('Account settings','Imiterere ya konti'),subtitle:t('Manage session details and review your current access role.')},
     admin:{title:t('Listing review queue','Amatangazo agomba kugenzurwa'),subtitle:t('Review submitted listings and record a clear decision and note.')},
+    'agent-review':{title:t('Agent application review','Igenzura ry’abahuza'),subtitle:t('Review applicant experience, service districts and contact consent before approving a public profile.')},
   };
   const title=heading[view];
 
