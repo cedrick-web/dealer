@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import {
-  ArrowLeft, ArrowRight, ArrowUpRight, CircleAlert, Heart, MapPin, RefreshCw, ShieldCheck,
+  ArrowLeft, ArrowRight, ArrowUpRight, Building2, CircleAlert, Heart, MapPin, RefreshCw, ShieldCheck,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { api, type Listing, type ListingImage } from '@/api';
-import { money, photoFor } from '@/lib/property-format';
+import { money } from '@/lib/property-format';
 
 export function PropertyImage({item,variant='card',onClick}:{item:Listing;variant?:'card'|'modal'|'mini';onClick?:()=>void}) {
   const images=item.images||[];
   const firstImage=images[0];
-  const [src,setSrc]=useState(firstImage&&item.status==='published'?api.listingImageUrl(firstImage.publicId):photoFor(item));
+  const [src,setSrc]=useState(firstImage&&item.status==='published'?api.listingImageUrl(firstImage.publicId):'');
   const [hasUploaded,setHasUploaded]=useState(Boolean(firstImage&&item.status==='published'));
   const [loadError,setLoadError]=useState(false);
   const [activeIndex,setActiveIndex]=useState(0);
@@ -21,7 +21,7 @@ export function PropertyImage({item,variant='card',onClick}:{item:Listing;varian
     let objectUrl:string|undefined;
     setLoadError(false);
     if(!uploaded){
-      setSrc(photoFor(item));
+      setSrc('');
       setHasUploaded(false);
       return ()=>{active=false};
     }
@@ -30,7 +30,7 @@ export function PropertyImage({item,variant='card',onClick}:{item:Listing;varian
       setHasUploaded(true);
       return ()=>{active=false};
     }
-    setSrc(photoFor(item));
+    setSrc('');
     setHasUploaded(false);
     api.loadListingImage(uploaded.publicId).then(url=>{
       objectUrl=url;
@@ -42,14 +42,15 @@ export function PropertyImage({item,variant='card',onClick}:{item:Listing;varian
   const movePhoto=(delta:number)=>setActiveIndex(index=>images.length?(index+delta+images.length)%images.length:0);
   const content=<>
     {variant==='card'&&<span className="listing-badge">{item.purpose==='sale'?'FOR SALE':'FOR RENT'}</span>}
-    <span className={'photo-proof-tag '+(hasUploaded?'photo-proof-real':'photo-proof-illustration')}>{variant==='mini'?(hasUploaded?'Seller photo':'Illustration'):hasUploaded?(uploaded?.alt||'Seller-uploaded property photo'):'Illustrative image · not the actual property'}</span>
+    <span className={'photo-proof-tag '+(hasUploaded?'photo-proof-real':uploaded?'photo-proof-loading':'photo-proof-missing')}>{hasUploaded?(variant==='mini'?'Seller photo':uploaded?.alt||'Seller-uploaded property photo'):uploaded?(loadError?'Photo unavailable':'Loading seller photo'):'No seller photo'}</span>
+    {!hasUploaded&&<span className="property-photo-empty" aria-hidden="true"><Building2 size={variant==='mini'?14:variant==='card'?32:38}/><span>{uploaded?(loadError?'Seller photo could not be loaded':'Loading private photo preview'):'No seller photo has been uploaded'}</span></span>}
     {variant==='card'&&<span className="photo-location"><MapPin size={13}/>{item.location.sector ? item.location.sector+', ':''}{item.location.district}</span>}
     {images.length>1&&variant!=='mini'&&<span className="photo-count-tag">{currentIndex+1} / {images.length} photos</span>}
     {loadError&&<span className="photo-load-warning">Uploaded photo unavailable</span>}
   </>;
-  if(variant==='card')return <button type="button" className="listing-photo" style={{backgroundImage:'url('+src+')'}} onClick={onClick} aria-label={'Open '+item.title}>{content}</button>;
-  if(variant==='mini')return <div className="compact-property-photo" role="img" aria-label={uploaded?.alt||('Property image for '+item.title)} style={{backgroundImage:'url('+src+')'}}>{content}</div>;
-  return <div className="modal-photo" role="group" aria-label={uploaded?.alt||('Property image for '+item.title)} style={{backgroundImage:'url('+src+')'}}>
+  if(variant==='card')return <button type="button" className="listing-photo" style={{backgroundImage:src?'url('+src+')':'linear-gradient(135deg,#e8efe7,#d9e5d7)'}} onClick={onClick} aria-label={'Open '+item.title}>{content}</button>;
+  if(variant==='mini')return <div className="compact-property-photo" role="img" aria-label={uploaded?.alt||('Property image for '+item.title)} style={{backgroundImage:src?'url('+src+')':'linear-gradient(135deg,#e8efe7,#d9e5d7)'}}>{content}</div>;
+  return <div className="modal-photo" role="group" aria-label={uploaded?.alt||('Property image for '+item.title)} style={{backgroundImage:src?'url('+src+')':'linear-gradient(135deg,#e8efe7,#d9e5d7)'}}>
     {content}
     {images.length>1&&<div className="modal-gallery-controls"><button type="button" onClick={()=>movePhoto(-1)} aria-label="Previous property photo"><ArrowLeft size={17}/></button><span>{currentIndex+1} of {images.length}</span><button type="button" onClick={()=>movePhoto(1)} aria-label="Next property photo"><ArrowRight size={17}/></button></div>}
   </div>;
