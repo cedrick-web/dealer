@@ -584,7 +584,17 @@ Future<void> main() async {
     final stage = clean(b?['stage'], 30);
     const stages = ['proposed', 'viewing', 'offer', 'due_diligence', 'agreement', 'completed', 'cancelled'];
     if (!stages.contains(stage)) return reply(422, {'error': 'Unsupported deal stage.'});
-    if (item['stage'] == 'completed' || item['stage'] == 'cancelled') return reply(409, {'error': 'Closed deals cannot be advanced.'});
+    final currentStage = item['stage'] as String? ?? 'proposed';
+    const transitions = <String, List<String>>{
+      'proposed': ['viewing', 'cancelled'],
+      'viewing': ['offer', 'cancelled'],
+      'offer': ['due_diligence', 'agreement', 'cancelled'],
+      'due_diligence': ['agreement', 'cancelled'],
+      'agreement': ['completed', 'cancelled'],
+    };
+    if (!(transitions[currentStage] ?? <String>[]).contains(stage)) {
+      return reply(409, {'error': 'Invalid deal transition from ' + currentStage + ' to ' + stage + '. Review the current milestone before moving forward.'});
+    }
     final history = List<dynamic>.from(item['history'] as List? ?? []);
     history.add({'stage': stage, 'actorId': c['sub'], 'at': now(), 'note': clean(b?['note'], 500)});
     await deals.updateOne(where.eq('publicId', id), modify.set('stage', stage).set('updatedAt', now()).set('history', history));
