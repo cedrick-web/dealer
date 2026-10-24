@@ -77,6 +77,7 @@ Map<String, dynamic>? userFrom(Request req) {
 }
 Response unauthenticated() => reply(401, {'error': 'Sign in is required for this action.'});
 String now() => DateTime.now().toUtc().toIso8601String();
+String prettyStageForNotification(String stage) => stage.replaceAll('_', ' ').split(' ').map((word) => word.isEmpty ? word : word[0].toUpperCase() + word.substring(1)).join(' ');
 String? validPurpose(dynamic v) => ['sale', 'rent'].contains(v) ? v as String : null;
 String? validType(dynamic v) => ['house', 'apartment', 'land', 'commercial', 'room'].contains(v) ? v as String : null;
 Map<String, dynamic> publicDoc(Map<String, dynamic> source, {bool includeReview = false}) {
@@ -288,6 +289,11 @@ Future<void> main() async {
     };
     await agentApplications.insertOne(item);
     await audit.insertOne({'eventId': uid.v4(), 'type': 'agent.application_submitted', 'subjectId': item['publicId'], 'actorId': claims['sub'], 'createdAt': at});
+    final admins = await users.find(where.eq('role', 'admin').eq('status', 'active')).toList();
+    for (final rawAdmin in admins) {
+      final admin = Map<String, dynamic>.from(rawAdmin);
+      await notifyUser(recipientId: admin['publicId']?.toString(), actorId: claims['sub']?.toString(), type: 'agent_application', title: 'Agent application received', body: 'A professional profile is waiting for review.', destination: 'agent-review', subjectId: item['publicId']?.toString());
+    }
     return reply(201, {'data': publicDoc(item, includeReview: true), 'message': 'Agent application sent for review. Your public profile will not appear until approved.'});
   });
 
@@ -337,6 +343,11 @@ Future<void> main() async {
     record['evidenceHash'] = digest;
     await listings.insertOne(record);
     await audit.insertOne({'eventId': uid.v4(), 'type': 'listing.submitted', 'subjectId': id, 'actorId': claims['sub'], 'evidenceHash': digest, 'createdAt': createdAt});
+    final admins = await users.find(where.eq('role', 'admin').eq('status', 'active')).toList();
+    for (final rawAdmin in admins) {
+      final admin = Map<String, dynamic>.from(rawAdmin);
+      await notifyUser(recipientId: admin['publicId']?.toString(), actorId: claims['sub']?.toString(), type: 'listing_review', title: 'Property listing submitted', body: 'A new property listing is waiting for review.', destination: 'admin', subjectId: id);
+    }
     return reply(201, {'id': id, 'status': 'pending_review', 'evidenceHash': digest, 'message': 'Submitted for human review. It will not appear publicly until approved.'});
   });
   r.get('/api/v1/me/listings', (Request q) async {
@@ -357,6 +368,7 @@ Future<void> main() async {
     final at = now();
     await listings.updateOne(where.eq('publicId', id), modify.set('status', status).set('updatedAt', at).set('reviewNote', note).set('reviewedBy', c['sub']));
     await audit.insertOne({'eventId': uid.v4(), 'type': 'listing.reviewed', 'subjectId': id, 'actorId': c['sub'], 'decision': decision, 'note': note, 'createdAt': at});
+    await notifyUser(recipientId: listing['ownerId']?.toString(), actorId: c['sub']?.toString(), type: 'listing_review', title: 'Listing review updated', body: 'Your listing "' + clean(listing['title'], 100) + '" is now ' + status.replaceAll('_', ' ') + (note.isNotEmpty ? '. Note: ' + note : '.'), destination: 'my-listings', subjectId: id);
     return reply(200, {'id': id, 'status': status});
   });
   r.get('/api/v1/admin/listings/pending', (Request q) async {
@@ -388,6 +400,7 @@ Future<void> main() async {
       await users.updateOne(where.eq('publicId', application['userId']), modify.set('role', 'agent'));
     }
     await audit.insertOne({'eventId': uid.v4(), 'type': 'agent.application_reviewed', 'subjectId': id, 'actorId': claims['sub'], 'decision': decision, 'note': note, 'createdAt': at});
+    await notifyUser(recipientId: application['userId']?.toString(), actorId: claims['sub']?.toString(), type: 'agent_review', title: 'Agent application reviewed', body: 'Your agent profile application is ' + status.replaceAll('_', ' ') + (note.isNotEmpty ? '. Note: ' + note : '.'), destination: 'agent-application', subjectId: id);
     return reply(200, {'id': id, 'status': status});
   });
 
@@ -425,6 +438,7 @@ Future<void> main() async {
     final item = {'publicId': uid.v4(), 'listingId': listingId, 'listingTitle': listing['title'], 'ownerId': listing['ownerId'], 'requesterId': c['sub'], 'type': type, 'message': message, 'preferredAt': preferredAt, 'status': 'open', 'createdAt': now()};
     await leads.insertOne(item);
     await audit.insertOne({'eventId': uid.v4(), 'type': 'lead.created', 'subjectId': item['publicId'], 'actorId': c['sub'], 'createdAt': now()});
+    await notifyUser(recipientId: listing['ownerId']?.toString(), actorId: c['sub']?.toString(), type: 'lead', title: type == 'viewing' ? 'New viewing request' : type == 'offer' ? 'New offer received' : 'New property question', body: 'Someone sent a request about "' + clean(listing['title'], 100) + '".', destination: 'dashboard', subjectId: item['publicId']?.toString());
     return reply(201, {'data': publicDoc(item)});
   });
   r.get('/api/v1/me/leads', (Request q) async {
@@ -451,6 +465,7 @@ Future<void> main() async {
     if (found != null) return reply(200, {'data': publicDoc(found)});
     final item = {'publicId': uid.v4(), 'listingId': listingId, 'listingTitle': listing['title'], 'ownerId': ownerId, 'participants': [c['sub'], ownerId], 'createdAt': now(), 'updatedAt': now()};
     await conversations.insertOne(item);
+    await notifyUser(recipientId: ownerId?.toString(), actorId: c['sub']?.toString(), type: 'conversation', title: 'New property conversation', body: 'A buyer started a conversation about "' + clean(listing['title'], 100) + '".', destination: 'messages', subjectId: item['publicId']?.toString());
     return reply(201, {'data': publicDoc(item)});
   });
   r.get('/api/v1/conversations/<id>/messages', (Request q, String id) async {
@@ -470,6 +485,9 @@ Future<void> main() async {
     final item = {'publicId': uid.v4(), 'conversationId': id, 'senderId': c['sub'], 'text': text, 'createdAt': now()};
     await messages.insertOne(item);
     await conversations.updateOne(where.eq('publicId', id), modify.set('updatedAt', now()).set('lastMessage', text.substring(0, text.length > 120 ? 120 : text.length)));
+    final participants = List<dynamic>.from(room['participants'] as List? ?? []);
+    final recipientId = participants.map((value) => value.toString()).firstWhere((value) => value != c['sub'], orElse: () => '');
+    await notifyUser(recipientId: recipientId, actorId: c['sub']?.toString(), type: 'message', title: 'New property message', body: 'A participant sent a message about "' + clean(room['listingTitle'], 100) + '".', destination: 'messages', subjectId: id);
     return reply(201, {'data': publicDoc(item)});
   });
 
@@ -493,6 +511,7 @@ Future<void> main() async {
     final item = {'publicId': uid.v4(), 'listingId': listingId, 'listingTitle': listing['title'], 'participants': [c['sub'], ownerId], 'initiatorId': c['sub'], 'commissionPercent': commission, 'commissionTerms': terms, 'feeAcceptedBy': [c['sub']], 'stage': 'proposed', 'history': [{'stage': 'proposed', 'actorId': c['sub'], 'at': now(), 'note': 'Proposal opened'}], 'createdAt': now(), 'updatedAt': now()};
     await deals.insertOne(item);
     await audit.insertOne({'eventId': uid.v4(), 'type': 'deal.created', 'subjectId': item['publicId'], 'actorId': c['sub'], 'createdAt': now()});
+    await notifyUser(recipientId: ownerId?.toString(), actorId: c['sub']?.toString(), type: 'deal', title: 'Commission terms proposed', body: 'A deal workspace was opened for "' + clean(listing['title'], 100) + '". Review the proposed terms in your workspace.', destination: 'deals', subjectId: item['publicId']?.toString());
     return reply(201, {'data': publicDoc(item)});
   });
   r.patch('/api/v1/deals/<id>/stage', (Request q, String id) async {
@@ -507,6 +526,9 @@ Future<void> main() async {
     final history = List<dynamic>.from(item['history'] as List? ?? []);
     history.add({'stage': stage, 'actorId': c['sub'], 'at': now(), 'note': clean(b?['note'], 500)});
     await deals.updateOne(where.eq('publicId', id), modify.set('stage', stage).set('updatedAt', now()).set('history', history));
+    final participants = List<dynamic>.from(item['participants'] as List? ?? []);
+    final recipientId = participants.map((value) => value.toString()).firstWhere((value) => value != c['sub'], orElse: () => '');
+    await notifyUser(recipientId: recipientId, actorId: c['sub']?.toString(), type: 'deal_stage', title: 'Deal milestone updated', body: 'The deal for "' + clean(item['listingTitle'], 100) + '" moved to ' + prettyStageForNotification(stage) + '.', destination: 'deals', subjectId: id);
     return reply(200, {'id': id, 'stage': stage, 'history': history});
   });
   r.post('/api/v1/deals/<id>/accept-fee', (Request q, String id) async {
@@ -516,6 +538,9 @@ Future<void> main() async {
     final accepted = List<dynamic>.from(item['feeAcceptedBy'] as List? ?? []);
     if (!accepted.contains(c['sub'])) accepted.add(c['sub']);
     await deals.updateOne(where.eq('publicId', id), modify.set('feeAcceptedBy', accepted).set('updatedAt', now()));
+    final participants = List<dynamic>.from(item['participants'] as List? ?? []);
+    final recipientId = participants.map((value) => value.toString()).firstWhere((value) => value != c['sub'], orElse: () => '');
+    await notifyUser(recipientId: recipientId, actorId: c['sub']?.toString(), type: 'fee_acceptance', title: 'Commission terms acknowledged', body: 'A participant acknowledged fee terms for "' + clean(item['listingTitle'], 100) + '".', destination: 'deals', subjectId: id);
     return reply(200, {'id': id, 'feeAcceptedBy': accepted, 'fullyAccepted': accepted.length >= 2});
   });
 
