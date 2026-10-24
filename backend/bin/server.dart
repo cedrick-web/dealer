@@ -25,6 +25,21 @@ String clean(dynamic value, [int max = 3000]) {
 }
 Map<String, dynamic>? asMap(dynamic value) => value is Map ? Map<String, dynamic>.from(value) : null;
 
+Future<Map<String, dynamic>?> currentUser(Request req, DbCollection users) async {
+  final claims = userFrom(req);
+  if (claims == null) return null;
+  final raw = await users.findOne(where.eq('publicId', claims['sub']));
+  final person = asMap(raw);
+  if (person == null || person['status'] != 'active') return null;
+  // Roles and account status are taken from MongoDB on every protected request,
+  // so an expired/disabled/demoted account cannot keep stale access through a token.
+  return <String, dynamic>{
+    ...claims,
+    'role': person['role'] as String? ?? 'member',
+    'email': person['email'] as String? ?? claims['email'],
+  };
+}
+
 Future<Map<String, dynamic>?> readJson(Request req, [int maxBytes = 1024 * 1024]) async {
   final declared = int.tryParse(req.headers['content-length'] ?? '');
   if (declared != null && declared > maxBytes) return null;
@@ -163,19 +178,19 @@ Future<void> main() async {
     return reply(200, {'token': token, 'user': publicDoc(person), 'expiresIn': 28800});
   });
   r.get('/api/v1/auth/me', (Request q) async {
-    final claims = userFrom(q); if (claims == null) return unauthenticated();
+    final claims = await currentUser(q, users); if (claims == null) return unauthenticated();
     final person = asMap(await users.findOne(where.eq('publicId', claims['sub'])));
     if (person == null || person['status'] != 'active') return unauthenticated();
     return reply(200, {'user': publicDoc(person)});
   });
 
   r.get('/api/v1/me/agent-profile', (Request q) async {
-    final claims = userFrom(q); if (claims == null) return unauthenticated();
+    final claims = await currentUser(q, users); if (claims == null) return unauthenticated();
     final rows = await agentApplications.find(where.eq('userId', claims['sub']), sort: {'updatedAt': -1}, limit: 1).toList();
     return reply(200, {'data': rows.isEmpty ? null : publicDoc(Map<String, dynamic>.from(rows.first), includeReview: true)});
   });
   r.post('/api/v1/agents/apply', (Request q) async {
-    final claims = userFrom(q); if (claims == null) return unauthenticated();
+    final claims = await currentUser(q, users); if (claims == null) return unauthenticated();
     final b = await readJson(q, 40 * 1024);
     if (b == null) return reply(400, {'error': 'Send a valid JSON object.'});
     final person = asMap(await users.findOne(where.eq('publicId', claims['sub'])));
@@ -231,7 +246,7 @@ Future<void> main() async {
     return reply(200, {'data': publicDoc(doc)});
   });
   r.post('/api/v1/listings', (Request q) async {
-    final claims = userFrom(q); if (claims == null) return unauthenticated();
+    final claims = await currentUser(q, users); if (claims == null) return unauthenticated();
     final b = await readJson(q, 80 * 1024);
     if (b == null) return reply(400, {'error': 'Send a valid JSON object.'});
     final title = clean(b['title'], 120), description = clean(b['description'], 3000);
@@ -258,12 +273,12 @@ Future<void> main() async {
     return reply(201, {'id': id, 'status': 'pending_review', 'evidenceHash': digest, 'message': 'Submitted for human review. It will not appear publicly until approved.'});
   });
   r.get('/api/v1/me/listings', (Request q) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final docs = await listings.find(where.eq('ownerId', c['sub']), sort: {'createdAt': -1}).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d), includeReview: true)).toList()});
   });
   r.patch('/api/v1/admin/listings/<id>/review', (Request q, String id) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     if (c['role'] != 'admin') return reply(403, {'error': 'Administrator access required.'});
     final b = await readJson(q, 20 * 1024);
     final decision = clean(b?['decision'], 20);
@@ -278,20 +293,20 @@ Future<void> main() async {
     return reply(200, {'id': id, 'status': status});
   });
   r.get('/api/v1/admin/listings/pending', (Request q) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     if (c['role'] != 'admin') return reply(403, {'error': 'Administrator access required.'});
     final docs = await listings.find(where.eq('status', 'pending_review'), sort: {'createdAt': 1}).limit(100).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
 
   r.get('/api/v1/admin/agents/pending', (Request q) async {
-    final claims = userFrom(q); if (claims == null) return unauthenticated();
+    final claims = await currentUser(q, users); if (claims == null) return unauthenticated();
     if (claims['role'] != 'admin') return reply(403, {'error': 'Administrator access required.'});
     final docs = await agentApplications.find(where.eq('status', 'pending_review'), sort: {'createdAt': 1}).limit(100).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d), includeReview: true)).toList()});
   });
   r.patch('/api/v1/admin/agents/<id>/review', (Request q, String id) async {
-    final claims = userFrom(q); if (claims == null) return unauthenticated();
+    final claims = await currentUser(q, users); if (claims == null) return unauthenticated();
     if (claims['role'] != 'admin') return reply(403, {'error': 'Administrator access required.'});
     final b = await readJson(q, 20 * 1024);
     final decision = clean(b?['decision'], 20);
@@ -310,12 +325,12 @@ Future<void> main() async {
   });
 
   r.get('/api/v1/me/favorites', (Request q) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final docs = await favorites.find(where.eq('userId', c['sub'])).toList();
     return reply(200, {'data': docs.map((d) => {'listingId': d['listingId'], 'createdAt': d['createdAt']}).toList()});
   });
   r.put('/api/v1/favorites/<listingId>', (Request q, String listingId) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final listing = await listings.findOne(where.eq('publicId', listingId));
     if (listing == null || listing['status'] != 'published') return reply(404, {'error': 'Published property not found.'});
     final existing = await favorites.findOne(where.eq('userId', c['sub']).eq('listingId', listingId));
@@ -323,13 +338,13 @@ Future<void> main() async {
     return reply(200, {'saved': true, 'listingId': listingId});
   });
   r.delete('/api/v1/favorites/<listingId>', (Request q, String listingId) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     await favorites.deleteOne(where.eq('userId', c['sub']).eq('listingId', listingId));
     return reply(200, {'saved': false, 'listingId': listingId});
   });
 
   r.post('/api/v1/leads', (Request q) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final b = await readJson(q, 25 * 1024);
     if (b == null) return reply(400, {'error': 'Send a valid JSON object.'});
     final listingId = clean(b['listingId'], 80);
@@ -346,18 +361,18 @@ Future<void> main() async {
     return reply(201, {'data': publicDoc(item)});
   });
   r.get('/api/v1/me/leads', (Request q) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final all = await leads.find(where.eq('requesterId', c['sub']).or(where.eq('ownerId', c['sub'])), sort: {'createdAt': -1}).toList();
     return reply(200, {'data': all.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
 
   r.get('/api/v1/me/conversations', (Request q) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final docs = await conversations.find(where.eq('participants', c['sub']), sort: {'updatedAt': -1}).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
   r.post('/api/v1/conversations', (Request q) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final b = await readJson(q, 20 * 1024);
     if (b == null) return reply(400, {'error': 'Send a valid JSON object.'});
     final listingId = clean(b['listingId'], 80);
@@ -372,14 +387,14 @@ Future<void> main() async {
     return reply(201, {'data': publicDoc(item)});
   });
   r.get('/api/v1/conversations/<id>/messages', (Request q, String id) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final room = asMap(await conversations.findOne(where.eq('publicId', id).eq('participants', c['sub'])));
     if (room == null) return reply(404, {'error': 'Conversation not found.'});
     final docs = await messages.find(where.eq('conversationId', id), sort: {'createdAt': 1}).limit(300).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
   r.post('/api/v1/conversations/<id>/messages', (Request q, String id) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final room = asMap(await conversations.findOne(where.eq('publicId', id).eq('participants', c['sub'])));
     if (room == null) return reply(404, {'error': 'Conversation not found.'});
     final b = await readJson(q, 20 * 1024);
@@ -392,12 +407,12 @@ Future<void> main() async {
   });
 
   r.get('/api/v1/me/deals', (Request q) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final docs = await deals.find(where.eq('participants', c['sub']), sort: {'updatedAt': -1}).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
   r.post('/api/v1/deals', (Request q) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final b = await readJson(q, 25 * 1024);
     final listingId = clean(b?['listingId'], 80);
     final commissionRaw = b?['commissionPercent'];
@@ -414,7 +429,7 @@ Future<void> main() async {
     return reply(201, {'data': publicDoc(item)});
   });
   r.patch('/api/v1/deals/<id>/stage', (Request q, String id) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final b = await readJson(q, 20 * 1024);
     final item = asMap(await deals.findOne(where.eq('publicId', id).eq('participants', c['sub'])));
     if (item == null) return reply(404, {'error': 'Deal not found.'});
@@ -428,7 +443,7 @@ Future<void> main() async {
     return reply(200, {'id': id, 'stage': stage, 'history': history});
   });
   r.post('/api/v1/deals/<id>/accept-fee', (Request q, String id) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final item = asMap(await deals.findOne(where.eq('publicId', id).eq('participants', c['sub'])));
     if (item == null) return reply(404, {'error': 'Deal not found.'});
     final accepted = List<dynamic>.from(item['feeAcceptedBy'] as List? ?? []);
@@ -438,7 +453,7 @@ Future<void> main() async {
   });
 
   r.get('/api/v1/listings/<listingId>/documents', (Request q, String listingId) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final listing = asMap(await listings.findOne(where.eq('publicId', listingId)));
     if (listing == null) return reply(404, {'error': 'Property not found.'});
     final isOwner = listing['ownerId'] == c['sub'];
@@ -449,7 +464,7 @@ Future<void> main() async {
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
   r.post('/api/v1/listings/<listingId>/documents', (Request q, String listingId) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final listing = asMap(await listings.findOne(where.eq('publicId', listingId)));
     if (listing == null) return reply(404, {'error': 'Property not found.'});
     if (listing['ownerId'] != c['sub']) return reply(403, {'error': 'Only the listing owner can upload evidence.'});
@@ -480,7 +495,7 @@ Future<void> main() async {
     return reply(201, {'data': publicDoc(doc), 'sha256': digest, 'note': 'Stored privately. The digest proves a specific byte sequence was recorded, not that the document is genuine.'});
   });
   r.get('/api/v1/documents/<id>/download', (Request q, String id) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final doc = asMap(await documents.findOne(where.eq('publicId', id)));
     if (doc == null) return reply(404, {'error': 'Document not found.'});
     final listing = asMap(await listings.findOne(where.eq('publicId', doc['listingId'])));
@@ -550,7 +565,7 @@ Future<void> main() async {
     return reply(200, {'token': token, 'user': publicDoc(person), 'expiresIn': 28800});
   });
   r.get('/api/v1/auth/me', (Request q) async {
-    final claims = userFrom(q); if (claims == null) return unauthenticated();
+    final claims = await currentUser(q, users); if (claims == null) return unauthenticated();
     final person = asMap(await users.findOne(where.eq('publicId', claims['sub'])));
     if (person == null || person['status'] != 'active') return unauthenticated();
     return reply(200, {'user': publicDoc(person)});
@@ -577,7 +592,7 @@ Future<void> main() async {
     return reply(200, {'data': publicDoc(doc)});
   });
   r.post('/api/v1/listings', (Request q) async {
-    final claims = userFrom(q); if (claims == null) return unauthenticated();
+    final claims = await currentUser(q, users); if (claims == null) return unauthenticated();
     final b = await readJson(q, 80 * 1024);
     if (b == null) return reply(400, {'error': 'Send a valid JSON object.'});
     final title = clean(b['title'], 120), description = clean(b['description'], 3000);
@@ -604,12 +619,12 @@ Future<void> main() async {
     return reply(201, {'id': id, 'status': 'pending_review', 'evidenceHash': digest, 'message': 'Submitted for human review. It will not appear publicly until approved.'});
   });
   r.get('/api/v1/me/listings', (Request q) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final docs = await listings.find(where.eq('ownerId', c['sub']), sort: {'createdAt': -1}).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
   r.patch('/api/v1/admin/listings/<id>/review', (Request q, String id) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     if (c['role'] != 'admin') return reply(403, {'error': 'Administrator access required.'});
     final b = await readJson(q, 20 * 1024);
     final decision = clean(b?['decision'], 20);
@@ -624,19 +639,19 @@ Future<void> main() async {
     return reply(200, {'id': id, 'status': status});
   });
   r.get('/api/v1/admin/listings/pending', (Request q) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     if (c['role'] != 'admin') return reply(403, {'error': 'Administrator access required.'});
     final docs = await listings.find(where.eq('status', 'pending_review'), sort: {'createdAt': 1}).limit(100).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
 
   r.get('/api/v1/me/favorites', (Request q) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final docs = await favorites.find(where.eq('userId', c['sub'])).toList();
     return reply(200, {'data': docs.map((d) => {'listingId': d['listingId'], 'createdAt': d['createdAt']}).toList()});
   });
   r.put('/api/v1/favorites/<listingId>', (Request q, String listingId) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final listing = await listings.findOne(where.eq('publicId', listingId));
     if (listing == null || listing['status'] != 'published') return reply(404, {'error': 'Published property not found.'});
     final existing = await favorites.findOne(where.eq('userId', c['sub']).eq('listingId', listingId));
@@ -644,13 +659,13 @@ Future<void> main() async {
     return reply(200, {'saved': true, 'listingId': listingId});
   });
   r.delete('/api/v1/favorites/<listingId>', (Request q, String listingId) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     await favorites.deleteOne(where.eq('userId', c['sub']).eq('listingId', listingId));
     return reply(200, {'saved': false, 'listingId': listingId});
   });
 
   r.post('/api/v1/leads', (Request q) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final b = await readJson(q, 25 * 1024);
     if (b == null) return reply(400, {'error': 'Send a valid JSON object.'});
     final listingId = clean(b['listingId'], 80);
@@ -667,18 +682,18 @@ Future<void> main() async {
     return reply(201, {'data': publicDoc(item)});
   });
   r.get('/api/v1/me/leads', (Request q) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final all = await leads.find(where.or(where.eq('requesterId', c['sub']), where.eq('ownerId', c['sub'])), sort: {'createdAt': -1}).toList();
     return reply(200, {'data': all.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
 
   r.get('/api/v1/me/conversations', (Request q) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final docs = await conversations.find(where.eq('participants', c['sub']), sort: {'updatedAt': -1}).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
   r.post('/api/v1/conversations', (Request q) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final b = await readJson(q, 20 * 1024);
     if (b == null) return reply(400, {'error': 'Send a valid JSON object.'});
     final listingId = clean(b['listingId'], 80);
@@ -693,14 +708,14 @@ Future<void> main() async {
     return reply(201, {'data': publicDoc(item)});
   });
   r.get('/api/v1/conversations/<id>/messages', (Request q, String id) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final room = asMap(await conversations.findOne(where.eq('publicId', id).eq('participants', c['sub'])));
     if (room == null) return reply(404, {'error': 'Conversation not found.'});
     final docs = await messages.find(where.eq('conversationId', id), sort: {'createdAt': 1}).limit(300).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
   r.post('/api/v1/conversations/<id>/messages', (Request q, String id) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final room = asMap(await conversations.findOne(where.eq('publicId', id).eq('participants', c['sub'])));
     if (room == null) return reply(404, {'error': 'Conversation not found.'});
     final b = await readJson(q, 20 * 1024);
@@ -713,12 +728,12 @@ Future<void> main() async {
   });
 
   r.get('/api/v1/me/deals', (Request q) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final docs = await deals.find(where.eq('participants', c['sub']), sort: {'updatedAt': -1}).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
   r.post('/api/v1/deals', (Request q) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final b = await readJson(q, 25 * 1024);
     final listingId = clean(b?['listingId'], 80);
     final commissionRaw = b?['commissionPercent'];
@@ -735,7 +750,7 @@ Future<void> main() async {
     return reply(201, {'data': publicDoc(item)});
   });
   r.patch('/api/v1/deals/<id>/stage', (Request q, String id) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final b = await readJson(q, 20 * 1024);
     final item = asMap(await deals.findOne(where.eq('publicId', id).eq('participants', c['sub'])));
     if (item == null) return reply(404, {'error': 'Deal not found.'});
@@ -749,7 +764,7 @@ Future<void> main() async {
     return reply(200, {'id': id, 'stage': stage, 'history': history});
   });
   r.post('/api/v1/deals/<id>/accept-fee', (Request q, String id) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final item = asMap(await deals.findOne(where.eq('publicId', id).eq('participants', c['sub'])));
     if (item == null) return reply(404, {'error': 'Deal not found.'});
     final accepted = List<dynamic>.from(item['feeAcceptedBy'] as List? ?? []);
@@ -759,7 +774,7 @@ Future<void> main() async {
   });
 
   r.get('/api/v1/listings/<listingId>/documents', (Request q, String listingId) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final listing = asMap(await listings.findOne(where.eq('publicId', listingId)));
     if (listing == null) return reply(404, {'error': 'Property not found.'});
     final isOwner = listing['ownerId'] == c['sub'];
@@ -769,7 +784,7 @@ Future<void> main() async {
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
   r.post('/api/v1/listings/<listingId>/documents', (Request q, String listingId) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final listing = asMap(await listings.findOne(where.eq('publicId', listingId)));
     if (listing == null) return reply(404, {'error': 'Property not found.'});
     if (listing['ownerId'] != c['sub']) return reply(403, {'error': 'Only the listing owner can upload evidence.'});
@@ -800,7 +815,7 @@ Future<void> main() async {
     return reply(201, {'data': publicDoc(doc), 'sha256': digest, 'note': 'Stored privately. The digest proves a specific byte sequence was recorded, not that the document is genuine.'});
   });
   r.get('/api/v1/documents/<id>/download', (Request q, String id) async {
-    final c = userFrom(q); if (c == null) return unauthenticated();
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final doc = asMap(await documents.findOne(where.eq('publicId', id)));
     if (doc == null) return reply(404, {'error': 'Document not found.'});
     final listing = asMap(await listings.findOne(where.eq('publicId', doc['listingId'])));
