@@ -328,8 +328,8 @@ Future<void> main() async {
     final type = validType(b['propertyType']), purpose = validPurpose(b['purpose']);
     final rawPrice = asMap(b['price'])?['amount'];
     final amount = rawPrice is num ? rawPrice.toInt() : int.tryParse('$rawPrice');
-    if (title.length < 8 || description.length < 30 || district.isEmpty || type == null || purpose == null || amount == null || amount < 1) {
-      return reply(422, {'error': 'Title must be 8+ characters, description 30+, and district, type, purpose and a positive RWF price are required.'});
+    if (title.length < 8 || description.length < 30 || !rwandaDistricts.contains(district) || type == null || purpose == null || amount == null || amount < 1) {
+      return reply(422, {'error': 'Title must be 8+ characters, description 30+, a valid Rwanda district, type, purpose and a positive integer RWF price are required.'});
     }
     final id = uid.v4(), createdAt = now();
     final record = <String, dynamic>{
@@ -354,6 +354,68 @@ Future<void> main() async {
     final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final docs = await listings.find(where.eq('ownerId', c['sub']), sort: {'createdAt': -1}).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d), includeReview: true)).toList()});
+  });
+
+  r.patch('/api/v1/me/listings/<id>', (Request q, String id) async {
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
+    final b = await readJson(q, 80 * 1024);
+    if (b == null) return reply(400, {'error': 'Send a valid JSON object.'});
+    final listing = asMap(await listings.findOne(where.eq('publicId', id).eq('ownerId', c['sub'])));
+    if (listing == null) return reply(404, {'error': 'Your listing was not found.'});
+    if (!['pending_review', 'changes_requested', 'rejected', 'published'].contains(listing['status'])) {
+      return reply(409, {'error': 'This listing cannot be edited in its current state.'});
+    }
+    final title = clean(b['title'], 120), description = clean(b['description'], 3000);
+    final loc = asMap(b['location']) ?? {};
+    final district = clean(loc['district'], 60), sector = clean(loc['sector'], 80);
+    final type = validType(b['propertyType']), purpose = validPurpose(b['purpose']);
+    final rawPrice = asMap(b['price'])?['amount'];
+    final amount = rawPrice is num && rawPrice == rawPrice.toInt() ? rawPrice.toInt() : int.tryParse('$rawPrice');
+    if (title.length < 8 || description.length < 30 || !rwandaDistricts.contains(district) || type == null || purpose == null || amount == null || amount < 1) {
+      return reply(422, {'error': 'Title must be 8+ characters, description 30+, a valid Rwanda district, type, purpose and a positive integer RWF price are required.'});
+    }
+    final at = now();
+    final revised = <String, dynamic>{
+      'publicId': id, 'ownerId': c['sub'], 'title': title, 'description': description,
+      'propertyType': type, 'purpose': purpose, 'location': {'district': district, 'sector': sector},
+      'price': {'amount': amount, 'currency': 'RWF', 'period': purpose == 'rent' ? 'month' : 'once'},
+      'status': 'pending_review', 'verification': {'status': 'unverified', 'checks': []},
+      'updatedAt': at,
+    };
+    final digest = sha256.convert(utf8.encode(jsonEncode(revised))).toString();
+    await listings.updateOne(where.eq('publicId', id).eq('ownerId', c['sub']), modify
+      .set('title', title)
+      .set('description', description)
+      .set('propertyType', type)
+      .set('purpose', purpose)
+      .set('location', revised['location'])
+      .set('price', revised['price'])
+      .set('status', 'pending_review')
+      .set('verification', revised['verification'])
+      .set('reviewNote', '')
+      .set('reviewedBy', '')
+      .set('updatedAt', at)
+      .set('evidenceHash', digest));
+    await audit.insertOne({'eventId': uid.v4(), 'type': 'listing.updated', 'subjectId': id, 'actorId': c['sub'], 'evidenceHash': digest, 'createdAt': at});
+    final admins = await users.find(where.eq('role', 'admin').eq('status', 'active')).toList();
+    for (final rawAdmin in admins) {
+      final admin = Map<String, dynamic>.from(rawAdmin);
+      await notifyUser(recipientId: admin['publicId']?.toString(), actorId: c['sub']?.toString(), type: 'listing_review', title: 'Property listing resubmitted', body: 'An edited property listing is waiting for review.', destination: 'admin', subjectId: id);
+    }
+    return reply(200, {'id': id, 'status': 'pending_review', 'evidenceHash': digest, 'message': 'Saved as a new review version. Public visibility is paused until approval.'});
+  });
+
+  r.post('/api/v1/me/listings/<id>/withdraw', (Request q, String id) async {
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
+    final listing = asMap(await listings.findOne(where.eq('publicId', id).eq('ownerId', c['sub'])));
+    if (listing == null) return reply(404, {'error': 'Your listing was not found.'});
+    if (!['pending_review', 'changes_requested', 'rejected', 'published'].contains(listing['status'])) {
+      return reply(409, {'error': 'This listing is already withdrawn or cannot be withdrawn.'});
+    }
+    final at = now();
+    await listings.updateOne(where.eq('publicId', id).eq('ownerId', c['sub']), modify.set('status', 'withdrawn').set('updatedAt', at));
+    await audit.insertOne({'eventId': uid.v4(), 'type': 'listing.withdrawn', 'subjectId': id, 'actorId': c['sub'], 'createdAt': at});
+    return reply(200, {'id': id, 'status': 'withdrawn'});
   });
   r.patch('/api/v1/admin/listings/<id>/review', (Request q, String id) async {
     final c = await currentUser(q, users); if (c == null) return unauthenticated();
