@@ -6,7 +6,7 @@ import { motion } from 'motion/react';
 import { api, type Listing, type ListingImage } from '@/api';
 import { money, photoFor } from '@/lib/property-format';
 
-function PropertyImage({item,variant='card',onClick}:{item:Listing;variant?:'card'|'modal';onClick?:()=>void}) {
+export function PropertyImage({item,variant='card',onClick}:{item:Listing;variant?:'card'|'modal';onClick?:()=>void}) {
   const images=item.images||[];
   const firstImage=images[0];
   const [src,setSrc]=useState(firstImage&&item.status==='published'?api.listingImageUrl(firstImage.publicId):photoFor(item));
@@ -54,7 +54,7 @@ function PropertyImage({item,variant='card',onClick}:{item:Listing;variant?:'car
   </div>;
 }
 
-function PrivateListingImage({image}:{image:ListingImage}) {
+export function PrivateListingImage({image}:{image:ListingImage}) {
   const [src,setSrc]=useState('');
   const [failed,setFailed]=useState(false);
   useEffect(()=>{
@@ -72,7 +72,7 @@ function PrivateListingImage({image}:{image:ListingImage}) {
   return <img className="photo-thumb-image" src={src} alt={image.alt||'Uploaded property photo'}/>;
 }
 
-function ListingCard({item,saved,onSave,onOpen,showSave=true}:{item:Listing;saved:boolean;onSave:()=>void;onOpen:()=>void;showSave?:boolean}) {
+export function ListingCard({item,saved,onSave,onOpen,showSave=true}:{item:Listing;saved:boolean;onSave:()=>void;onOpen:()=>void;showSave?:boolean}) {
   return <motion.article className="listing-card" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} whileHover={{y:-3,boxShadow:'0 16px 36px rgba(20,48,34,.10)'}} transition={{duration:.18,ease:'easeOut'}}>
     <PropertyImage item={item} onClick={onOpen}/>
     {showSave&&<button className={'favorite-float '+(saved?'is-saved':'')} onClick={onSave} aria-label={saved?'Remove saved property':'Save property'}><Heart size={18} fill={saved?'currentColor':'none'}/></button>}
