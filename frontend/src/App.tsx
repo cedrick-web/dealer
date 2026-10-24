@@ -36,6 +36,10 @@ export default function App() {
   const [view,setView] = useState<View>('discover');
   const [returnView,setReturnView] = useState<View>('dashboard');
   const [items,setItems] = useState<Listing[]>([]);
+  const [listingPage,setListingPage] = useState(1);
+  const [listingTotal,setListingTotal] = useState(0);
+  const [listingHasMore,setListingHasMore] = useState(false);
+  const [loadingMore,setLoadingMore] = useState(false);
   const [myItems,setMyItems] = useState<Listing[]>([]);
   const [savedIds,setSavedIds] = useState<string[]>([]);
   const [savedItems,setSavedItems] = useState<Listing[]>([]);
@@ -87,22 +91,53 @@ export default function App() {
 
   const t = (en:string,rw:string) => language==='en'?en:rw;
   const flash = (text:string) => { setNotice(text); window.setTimeout(()=>setNotice(current=>current===text?'':current),6500); };
-  const listingRequestSequence = useRef(0);
-  const refreshListings = useCallback(async () => {
-    const sequence = ++listingRequestSequence.current;
-    const params:Record<string,string> = {limit:'60',purpose};
+  const listingParams = useCallback((page = 1) => {
+    const params:Record<string,string> = {limit:'60',purpose,sort};
+    if(page>1)params.page=String(page);
     if(district!=='All Rwanda')params.district=district;
     if(propertyType!=='All properties')params.type=propertyType;
     if(maxPrice.trim()&&Number(maxPrice)>0)params.maxPrice=String(Math.floor(Number(maxPrice)));
     if(search.trim())params.q=search.trim();
+    return params;
+  },[purpose,district,propertyType,maxPrice,search,sort]);
+  const listingRequestSequence = useRef(0);
+  const refreshListings = useCallback(async () => {
+    const sequence = ++listingRequestSequence.current;
     try {
-      const result = await api.listings(params);
-      if(sequence===listingRequestSequence.current){setItems(result.data || []);setApiOnline(true);}
+      const result = await api.listings(listingParams(1));
+      if(sequence===listingRequestSequence.current){
+        setItems(result.data || []);
+        setListingPage(result.page || 1);
+        setListingTotal(result.total || 0);
+        setListingHasMore(Boolean(result.hasMore));
+        setApiOnline(true);
+      }
     } catch (e) {
       if(sequence===listingRequestSequence.current)setApiOnline(false);
       throw e;
     }
-  },[purpose,district,propertyType,maxPrice,search]);
+  },[listingParams]);
+  const loadMoreListings = useCallback(async () => {
+    if(!listingHasMore||loadingMore)return;
+    const sequence=listingRequestSequence.current;
+    const nextPage=listingPage+1;
+    setLoadingMore(true);
+    try {
+      const result=await api.listings(listingParams(nextPage));
+      if(sequence!==listingRequestSequence.current)return;
+      setItems(previous=>{
+        const seen=new Set(previous.map(item=>item.publicId));
+        return [...previous,...(result.data||[]).filter(item=>!seen.has(item.publicId))];
+      });
+      setListingPage(result.page||nextPage);
+      setListingTotal(result.total||0);
+      setListingHasMore(Boolean(result.hasMore));
+    } catch(error) {
+      flash('Could not load the next page of listings: '+(error as Error).message);
+    } finally {
+      setLoadingMore(false);
+    }
+  },[listingHasMore,loadingMore,listingPage,listingParams]);
   const refreshWorkspace = useCallback(async (activeUser:User) => {
     setProfileForm({name:activeUser.name||'',phone:activeUser.phone||''});
     const safe = async <T,>(fn:()=>Promise<T>, fallback:T) => { try { return await fn(); } catch { return fallback; } };
@@ -464,8 +499,9 @@ export default function App() {
           <div className="hero-panel"><div className="hero-glow"/><div className="hero-text"><div className="hero-kicker"><Sparkles size={15}/> MORE CLARITY. FEWER SURPRISES.</div><h2>Find a place.<br/><em>Know what comes next.</em></h2><p>Houses, apartments and land, with a trail for questions, viewing requests and deal milestones.</p><div className="hero-stats"><span><b>{items.length}</b><small>Public listings</small></span><span><b>{districts.length||30}</b><small>District options</small></span><span><b>RWF</b><small>Local currency</small></span></div></div><div className="hero-illustration"><div className="illustration-house"><House size={82} strokeWidth={1}/><span/><span/><span/></div><div className="float-chip chip-proof"><ShieldCheck size={16}/>Evidence trail</div><div className="float-chip chip-deal"><CheckCircle2 size={16}/>Deal milestones</div></div></div>
           <div className="quick-actions"><button onClick={()=>navTo('new-listing')}><span className="quick-icon"><FilePlus2 size={19}/></span><span><b>Create a listing</b><small>Submit a house, room or land</small></span><ChevronRight size={17}/></button><button onClick={()=>navTo('saved')}><span className="quick-icon quick-lilac"><Heart size={19}/></span><span><b>Compare your shortlist</b><small>Keep properties in one place</small></span><ChevronRight size={17}/></button><button onClick={()=>navTo('deals')}><span className="quick-icon quick-gold"><WalletCards size={19}/></span><span><b>Track a deal</b><small>Fees, steps and decisions</small></span><ChevronRight size={17}/></button></div>
           <div className="toolbar"><Tabs value={purpose} onValueChange={value=>setPurpose(value as 'sale'|'rent')} className="purpose-switch"><TabsList className="purpose-tabs-list"><TabsTrigger value="sale">Buy</TabsTrigger><TabsTrigger value="rent">Rent</TabsTrigger></TabsList></Tabs><label className="filter-control"><MapPin size={15}/><select value={district} onChange={e=>setDistrict(e.target.value)}><option>All Rwanda</option>{districts.map(x=><option key={x}>{x}</option>)}</select><ChevronDown size={14}/></label><label className="filter-control"><Building2 size={15}/><select value={propertyType} onChange={e=>setPropertyType(e.target.value)}><option>All properties</option><option value="house">House</option><option value="apartment">Apartment</option><option value="land">Land</option><option value="commercial">Commercial</option><option value="room">Room</option></select><ChevronDown size={14}/></label><label className="price-filter"><span>Max price (RWF)</span><input type="number" inputMode="numeric" min="1" step="1" placeholder="Any budget" value={maxPrice} onChange={e=>setMaxPrice(e.target.value)} aria-label="Maximum price in Rwandan francs"/></label><label className="filter-control"><SlidersHorizontal size={15}/><select value={sort} onChange={e=>setSort(e.target.value)}><option value="newest">Newest first</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="oldest">Oldest first</option></select></label><button className="btn btn-outline btn-sm" onClick={()=>{setDistrict('All Rwanda');setPropertyType('All properties');setMaxPrice('');setSearch('');setSort('newest')}}><Filter size={14}/>Clear</button></div>
-          <div className="section-title-row"><div><h2>Explore properties</h2><p>Only published listings from the API appear here.</p></div><span className="count-pill">{filtered.length} results</span></div>
+          <div className="section-title-row"><div><h2>Explore properties</h2><p>Only published listings from the API appear here. Results are filtered and sorted by the server.</p></div><span className="count-pill">{listingTotal?`Showing ${items.length} of ${listingTotal}`:`${filtered.length} results`}</span></div>
           {filtered.length?<div className="listing-grid">{filtered.map(item=><ListingCard key={item.publicId} item={item} saved={savedIds.includes(item.publicId)} onSave={()=>saveListing(item)} onOpen={()=>{setModal(item);setViewingForm({message:'I would like to arrange a viewing and discuss this property.',preferredAt:''});setDocs([])}}/>)}</div>:<EmptyState title={apiOnline?'No published properties match yet':'API is not reachable'} body={apiOnline?'There are no published listings for these filters. Create a listing or clear the filters to keep exploring.':'Start Docker Compose, then refresh. Illustrative fake listings are intentionally not presented as genuine homes for sale.'} icon={apiOnline?House:CircleAlert} action={()=>apiOnline?navTo('new-listing'):void withBusy(async()=>refreshListings())} button={apiOnline?'Create a listing':'Retry connection'}/>}
+          {listingHasMore&&<div className="load-more-row"><Button variant="outline" size="lg" disabled={loadingMore} onClick={()=>void loadMoreListings()}>{loadingMore?<><RefreshCw className="animate-spin" size={16}/>Loading more properties…</>:<>Load more properties <ArrowDown size={16}/></>}</Button><span>Showing {items.length} of {listingTotal} published properties from the API.</span></div>}
         </section>}
 
         {view==='agents'&&<section className="view-content">
