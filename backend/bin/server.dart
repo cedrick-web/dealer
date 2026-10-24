@@ -114,7 +114,7 @@ String? validPurpose(dynamic v) => ['sale', 'rent'].contains(v) ? v as String : 
 String? validType(dynamic v) => ['house', 'apartment', 'land', 'commercial', 'room'].contains(v) ? v as String : null;
 Map<String, dynamic> publicDoc(Map<String, dynamic> source, {bool includeReview = false}) {
   final out = Map<String, dynamic>.from(source);
-  out.remove('_id'); out.remove('passwordHash'); out.remove('evidenceHash');
+  out.remove('_id'); out.remove('passwordHash'); out.remove('evidenceHash'); out.remove('tokenVersion');
   out.remove('ownerPrivate'); out.remove('filePath');
   if (!includeReview) { out.remove('reviewNote'); out.remove('reviewedBy'); }
   return out;
