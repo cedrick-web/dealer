@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data' show BytesBuilder;
 import 'package:bcrypt/bcrypt.dart';
 import 'package:crypto/crypto.dart';
 import 'package:mongo_dart/mongo_dart.dart';
@@ -75,10 +76,16 @@ Future<Map<String, dynamic>?> currentUser(Request req, DbCollection users) async
 
 Future<Map<String, dynamic>?> readJson(Request req, [int maxBytes = 1024 * 1024]) async {
   final declared = int.tryParse(req.headers['content-length'] ?? '');
-  if (declared != null && declared > maxBytes) return null;
-  final raw = await req.readAsString();
-  if (utf8.encode(raw).length > maxBytes) return null;
+  if (declared != null && (declared < 0 || declared > maxBytes)) return null;
+  final builder = BytesBuilder(copy: false);
+  var totalBytes = 0;
   try {
+    await for (final chunk in req.read()) {
+      totalBytes += chunk.length;
+      if (totalBytes > maxBytes) return null;
+      builder.add(chunk);
+    }
+    final raw = utf8.decode(builder.takeBytes());
     final decoded = jsonDecode(raw);
     return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
   } catch (_) {
