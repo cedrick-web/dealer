@@ -32,10 +32,9 @@ function EmptyState({icon:Icon=Search,title,body,action,button}:{icon?:any;title
 }
 function PropertyImage({item,variant='card',onClick}:{item:Listing;variant?:'card'|'modal';onClick?:()=>void}) {
   const images=item.images||[];
-  const photoIndex=Math.min((item as Listing & {photoIndex?:number}).photoIndex||0,Math.max(0,images.length-1));
-  const selectedImage=images[photoIndex];
-  const [src,setSrc]=useState(selectedImage&&item.status==='published'?api.listingImageUrl(selectedImage.publicId):photoFor(item));
-  const [hasUploaded,setHasUploaded]=useState(Boolean(selectedImage&&item.status==='published'));
+  const firstImage=images[0];
+  const [src,setSrc]=useState(firstImage&&item.status==='published'?api.listingImageUrl(firstImage.publicId):photoFor(item));
+  const [hasUploaded,setHasUploaded]=useState(Boolean(firstImage&&item.status==='published'));
   const [loadError,setLoadError]=useState(false);
   const [activeIndex,setActiveIndex]=useState(0);
   useEffect(()=>{setActiveIndex(0)},[item.publicId]);
@@ -73,7 +72,7 @@ function PropertyImage({item,variant='card',onClick}:{item:Listing;variant?:'car
     {loadError&&<span className="photo-load-warning">Uploaded photo unavailable</span>}
   </>;
   if(variant==='card')return <button type="button" className="listing-photo" style={{backgroundImage:'url('+src+')'}} onClick={onClick} aria-label={'Open '+item.title}>{content}</button>;
-  return <div className="modal-photo" role="img" aria-label={uploaded?.alt||('Property image for '+item.title)} style={{backgroundImage:'url('+src+')'}}>
+  return <div className="modal-photo" role="group" aria-label={uploaded?.alt||('Property image for '+item.title)} style={{backgroundImage:'url('+src+')'}}>
     {content}
     {images.length>1&&<div className="modal-gallery-controls"><button type="button" onClick={()=>movePhoto(-1)} aria-label="Previous property photo"><ArrowLeft size={17}/></button><span>{currentIndex+1} of {images.length}</span><button type="button" onClick={()=>movePhoto(1)} aria-label="Next property photo"><ArrowRight size={17}/></button></div>}
   </div>;
