@@ -12,7 +12,7 @@ export type Conversation = { publicId: string; listingId: string; listingTitle: 
 export type Message = { publicId: string; conversationId: string; senderId: string; text: string; createdAt: string };
 export type Deal = {
   publicId: string; listingId: string; listingTitle: string; participants: string[]; commissionPercent: number; commissionTerms: string;
-  feeAcceptedBy: string[]; stage: string; history: { stage: string; actorId: string; at: string; note?: string }[]; updatedAt: string;
+  feeAcceptedBy: string[]; completionConfirmedBy?: string[]; stage: string; history: { stage: string; actorId: string; at: string; note?: string }[]; updatedAt: string;
 };
 export type EvidenceDocument = { publicId: string; listingId: string; fileName: string; contentType: string; sizeBytes: number; createdAt: string; reviewStatus: string };
 export type ListingImage = { publicId:string; alt:string; contentType:string; sizeBytes:number };
@@ -87,7 +87,7 @@ export const api = {
   sendMessage: (id:string,text:string) => request<ApiResult<Message>>('/api/v1/conversations/' + encodeURIComponent(id) + '/messages', json({text})),
   deals: () => request<ApiResult<Deal[]>>('/api/v1/me/deals'),
   createDeal: (input:{listingId:string;commissionPercent:number;commissionTerms:string}) => request<ApiResult<Deal>>('/api/v1/deals', json(input)),
-  updateDealStage: (id:string,stage:string,note:string) => request('/api/v1/deals/' + encodeURIComponent(id) + '/stage', {method:'PATCH',body:JSON.stringify({stage,note})}),
+  updateDealStage: (id:string,stage:string,note:string) => request<{id:string;stage:string;completionPending?:boolean;completionConfirmedBy?:string[];history:Deal['history']}>('/api/v1/deals/' + encodeURIComponent(id) + '/stage', {method:'PATCH',body:JSON.stringify({stage,note})}),
   acceptFee: (id:string) => request('/api/v1/deals/' + encodeURIComponent(id) + '/accept-fee', json({})),
   listingImageUrl: (id:string) => API + '/api/v1/listing-images/' + encodeURIComponent(id),
   loadListingImage: async (id:string) => {
