@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { api, type Agent, type AgentApplication, type AppNotification, type Conversation, type Deal, type EvidenceDocument, type Lead, type Listing, type Message, type User, setSessionToken } from './api';
 
-type View = 'discover'|'agents'|'agent-application'|'agent-review'|'notifications'|'dashboard'|'new-listing'|'my-listings'|'saved'|'messages'|'deals'|'trust'|'account'|'admin';
+type View = 'discover'|'agents'|'agent-application'|'agent-review'|'notifications'|'dashboard'|'enquiries'|'new-listing'|'my-listings'|'saved'|'messages'|'deals'|'trust'|'account'|'admin';
 type AuthMode = 'login'|'register';
 const money = (amount:number) => new Intl.NumberFormat('en-RW',{style:'currency',currency:'RWF',maximumFractionDigits:0}).format(amount || 0);
 const dateLabel = (value?:string) => value ? new Date(value).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}) : 'Not recorded';
@@ -169,7 +169,7 @@ export default function App() {
   };
   const navTo = (target:View) => {
     setMobileNav(false);
-    if(['dashboard','new-listing','my-listings','saved','messages','deals','account','admin','agent-application','agent-review'].includes(target) && !user) { setReturnView(target); setAuthMode('login'); setAuthOpen(true); setView(target==='new-listing'?'discover':target); return; }
+    if(['dashboard','enquiries','new-listing','my-listings','saved','messages','deals','account','admin','agent-application','agent-review','notifications'].includes(target) && !user) { setReturnView(target); setAuthMode('login'); setAuthOpen(true); setView(target==='new-listing'?'discover':target); return; }
     setView(target);
   };
   const withBusy = async (job:()=>Promise<void>) => {
@@ -194,7 +194,7 @@ export default function App() {
       setNotifications(previous=>previous.map(n=>n.publicId===item.publicId?{...n,readAt:new Date().toISOString()}:n));
       setUnreadCount(value=>Math.max(0,value-1));
     }
-    const allowed:View[]=['discover','agents','agent-application','agent-review','dashboard','new-listing','my-listings','saved','messages','deals','trust','account','admin','notifications'];
+    const allowed:View[]=['discover','agents','agent-application','agent-review','dashboard','enquiries','new-listing','my-listings','saved','messages','deals','trust','account','admin','notifications'];
     navTo(allowed.includes(item.destination as View)?item.destination as View:'notifications');
   });
   const markAllNotificationsRead = () => void withBusy(async()=>{
@@ -299,6 +299,21 @@ export default function App() {
       if(c) setConversations(prev=>prev.map(x=>x.publicId===c.publicId?{...x,lastMessage:messageDraft.trim(),updatedAt:new Date().toISOString()}:x));
     });
   };
+  const updateLeadStatus = (lead:Lead,status:'contacted'|'accepted'|'declined'|'completed'|'cancelled') => void withBusy(async()=>{
+    await api.updateLeadStatus(lead.publicId,status);
+    await refreshWorkspace(user!);
+    flash('Enquiry status updated to '+prettyStage(status)+'. The other party has been notified.');
+  });
+  const openLeadConversation = (lead:Lead) => {
+    if(!requireUser('messages'))return;
+    void withBusy(async()=>{
+      const isOwner=lead.ownerId===user!.publicId;
+      const result=await api.openConversation(lead.listingId,isOwner?lead.requesterId:undefined);
+      await refreshWorkspace(user!);
+      setSelectedConversation(result.data.publicId);
+      setView('messages');
+    });
+  };
   const acceptFee = (deal:Deal) => void withBusy(async()=>{await api.acceptFee(deal.publicId);await refreshWorkspace(user!);flash('Fee acceptance recorded. This is an in-platform acknowledgement, not a substitute for a signed contract.')});
   const updateStage = (deal:Deal,stage:string) => void withBusy(async()=>{await api.updateDealStage(deal.publicId,stage,'Milestone updated in the deal workspace');await refreshWorkspace(user!)});
   const runReview = (item:Listing,decision:'approve'|'reject'|'request_changes') => void withBusy(async()=>{await api.adminReview(item.publicId,decision,reviewNotes[item.publicId]||'');await refreshWorkspace(user!);await refreshListings();flash('Review decision recorded: '+decision+'.')});
@@ -316,6 +331,7 @@ export default function App() {
     {id:'saved',label:t('Saved properties','Ibyabitswe'),icon:Heart,group:'Workspace'},
     {id:'notifications',label:t('Notifications','Ibimenyesha'),icon:Bell,group:'Workspace'},
     {id:'messages',label:t('Messages','Ubutumwa'),icon:MessageCircle,group:'Workspace'},
+    {id:'enquiries',label:t('Enquiries & viewings','Ibibazo no gusura'),icon:ClipboardList,group:'Workspace'},
     {id:'deals',label:t('Deals & fees','Amasezerano'),icon:WalletCards,group:'Workspace'},
     {id:'trust',label:t('Evidence checker','Igenzura ry’inyandiko'),icon:ShieldCheck,group:'Tools'},
     ...(user?.role==='admin'?[{id:'admin' as View,label:t('Review queue','Igenzura'),icon:ClipboardList,group:'Administration'},{id:'agent-review' as View,label:t('Agent applications','Abahuza bashya'),icon:Users,group:'Administration'}]:[]),
@@ -327,6 +343,7 @@ export default function App() {
     'agent-application':{title:t('Become a property agent','Ba umuhuza w’imitungo'),subtitle:t('Submit a professional profile for human review. Approval is required before the profile becomes public.')},
     'agent-review':{title:t('Agent application review','Igenzura ry’abahuza'),subtitle:t('Review applicant experience, service districts and contact consent before approving a public profile.')},
     notifications:{title:t('Notifications and updates','Ibimenyesha n’amakuru'),subtitle:t('Track listing reviews, new enquiries, conversations and deal milestones from your account.')},
+    enquiries:{title:t('Enquiries, offers and viewings','Ibibazo, ibyifuzo no gusura'),subtitle:t('Process viewing requests, respond to prospective buyers and keep each enquiry status visible to both parties.')},
     dashboard:{title:t('Your property workspace','Ahantu hakurikirana imitungo yawe'),subtitle:t('Keep your listings, conversations, viewing requests and deal milestones in one place.')},
     'new-listing':{title:t('Create a property listing','Shyiraho itangazo ry’umutungo'),subtitle:t('Submissions stay private until the review team approves them.')},
     'my-listings':{title:t('Your listings','Amatangazo yawe'),subtitle:t('See review status and continue preparing the evidence for every property.')},
@@ -381,6 +398,25 @@ export default function App() {
           <aside className="panel side-checklist"><div className="checklist-icon"><ShieldCheck size={22}/></div><h3>What reviewers look for</h3><p>Quality and honesty matter more than marketing claims.</p>{['A clear, specific professional biography','Realistic service areas and contact details','Accurate experience claims','Consent before publishing a phone number','Willingness to record fee terms and deal milestones'].map((x,i)=><div className="checklist-item" key={x}><span>{i+1}</span>{x}</div>)}<div className="tip-box"><Sparkles size={16}/><span>Only approved profiles appear in the public directory. Approval does not establish legal qualifications or guarantee a transaction.</span></div></aside>
         </section>}
 
+        {view==='enquiries'&&<section className="view-content enquiries-view">
+          <div className="enquiry-toolbar"><div><span className="count-pill">{leads.length} total</span><span className="notifications-caption">Every status update is logged and notifies the other participant.</span></div><button className="btn btn-outline btn-sm" onClick={()=>void withBusy(async()=>refreshWorkspace(user!))} disabled={busy}><RefreshCw size={14}/>Refresh</button></div>
+          {leads.length?<div className="enquiry-list">{leads.map(lead=>{
+            const isOwner=lead.ownerId===user?.publicId;
+            const isRequester=lead.requesterId===user?.publicId;
+            const ownerNext:('contacted'|'accepted'|'declined'|'completed')[]=lead.status==='open'?['contacted','accepted','declined']:lead.status==='contacted'?['accepted','declined']:lead.status==='accepted'?['completed']:[];
+            const requesterCanCancel=isRequester&&['open','contacted','accepted'].includes(lead.status);
+            return <article className="panel enquiry-card" key={lead.publicId}>
+              <div className="enquiry-card-head"><span className="enquiry-kind"><CalendarClock size={16}/>{prettyStage(lead.type)}</span><StatusPill value={lead.status}/></div>
+              <h3>{lead.listingTitle}</h3>
+              <div className="enquiry-metadata"><span><MapPin size={13}/>{isOwner?'Your property':'Property enquiry'}</span><span>{dateLabel(lead.createdAt)}</span>{lead.preferredAt&&<span><CalendarClock size={13}/>{new Date(lead.preferredAt).toLocaleString()}</span>}</div>
+              <p className="enquiry-message">{lead.message||'No message provided.'}</p>
+              <div className="enquiry-actions"><button className="btn btn-outline btn-sm" onClick={()=>openLeadConversation(lead)} disabled={busy}><MessageCircle size={14}/>Open conversation</button>{isOwner&&ownerNext.map(next=><button key={next} className={next==='declined'?'btn btn-danger btn-sm':'btn btn-primary btn-sm'} disabled={busy} onClick={()=>updateLeadStatus(lead,next)}>{next==='contacted'?'Mark contacted':next==='accepted'?'Accept request':next==='declined'?'Decline':'Mark completed'}</button>)}{requesterCanCancel&&<button className="btn btn-danger btn-sm" disabled={busy} onClick={()=>updateLeadStatus(lead,'cancelled')}>Cancel request</button>}</div>
+              {isRequester&&lead.status==='declined'&&<p className="enquiry-status-note">The property owner declined this enquiry. The conversation remains available for clarification.</p>}
+              {isOwner&&!ownerNext.length&&<p className="enquiry-status-note">This enquiry is closed for status changes. You can still use the conversation to refer back to the discussion.</p>}
+            </article>;
+          })}</div>:<EmptyState icon={ClipboardList} title="No enquiries yet" body="Viewing requests, questions and offers from published property listings will appear here, with separate controls for owners and requesters." action={()=>navTo('discover')} button="Explore properties"/>}
+        </section>}
+
         {view==='notifications'&&<section className="view-content notifications-view">
           <div className="notifications-toolbar"><div><span className="count-pill">{unreadCount} unread</span><span className="notifications-caption">Notifications stay attached to your account, not this device.</span></div><button className="btn btn-outline btn-sm" disabled={busy||unreadCount===0} onClick={markAllNotificationsRead}><Check size={14}/>Mark all read</button></div>
           {notifications.length?<div className="notification-list">{notifications.map(item=><button className={'notification-card '+(!item.readAt?'unread':'')} key={item.publicId} onClick={()=>markNotificationRead(item)}><span className={'notification-icon '+item.type.replaceAll('_','-')}><NotificationIcon type={item.type}/></span><span className="notification-copy"><span className="notification-top"><b>{item.title}</b><small>{dateLabel(item.createdAt)}</small></span><p>{item.body}</p><small className="notification-destination">{prettyStage(item.destination)} <ArrowUpRight size={12}/></small></span>{!item.readAt&&<i className="unread-dot" aria-label="Unread"/>}</button>)}</div>:<EmptyState icon={Bell} title="You're up to date" body="New viewing requests, messages, listing decisions and commission milestones will appear here." action={()=>navTo('discover')} button="Explore properties"/>}
@@ -432,11 +468,11 @@ function Metric({icon:Icon,label,value,detail}:{icon:any;label:string;value:numb
 function NotificationIcon({type}:{type:string}) {
   if(type==='message'||type==='conversation')return <MessageCircle size={18}/>;
   if(type==='listing_review'||type==='agent_review')return <ShieldCheck size={18}/>;
-  if(type==='lead')return <CalendarClock size={18}/>;
+  if(type==='lead'||type==='lead_status')return <CalendarClock size={18}/>;
   if(type==='deal'||type==='deal_stage'||type==='fee_acceptance')return <WalletCards size={18}/>;
   return <Bell size={18}/>;
 }
 function StatusPill({value}:{value:string}) {
-  const type=['published','completed','active','approve','approved','reviewed'].includes(value)?'good':['pending_review','proposed','open','viewing','offer','due_diligence','agreement','changes_requested'].includes(value)?'waiting':['rejected','cancelled'].includes(value)?'bad':'neutral';
+  const type=['published','completed','active','approve','approved','reviewed','accepted','contacted'].includes(value)?'good':['pending_review','proposed','open','viewing','offer','due_diligence','agreement','changes_requested'].includes(value)?'waiting':['rejected','cancelled','declined','withdrawn'].includes(value)?'bad':'neutral';
   return <span className={'status-pill '+type}><i/>{prettyStage(value)}</span>;
 }
