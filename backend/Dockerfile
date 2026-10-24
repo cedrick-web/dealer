@@ -14,9 +14,8 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=build /runtime/ /
 COPY --from=build /app/bin/server /app/server
-RUN mkdir -p /data/private-documents && useradd --system --uid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin dealer \
-    && chown -R dealer:dealer /data/private-documents /app
-USER dealer
+RUN mkdir -p /data/private-documents && chown -R 10001:10001 /data/private-documents /app
+USER 10001:10001
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 CMD curl -fsS http://127.0.0.1:8080/health >/dev/null || exit 1
 ENTRYPOINT ["/app/server"]
