@@ -1,6 +1,6 @@
 import type { FormEventHandler, Dispatch, SetStateAction } from 'react';
-import { ArrowRight, BadgeCheck, CalendarClock, CheckCircle2, FileCheck2, LockKeyhole, MessageCircle, RefreshCw, ShieldCheck, Sparkles, UserCircle, Users, X } from 'lucide-react';
-import { Agent, AgentApplication } from '@/api';
+import { ArrowRight, BadgeCheck, CalendarClock, CheckCircle2, FileCheck2, LockKeyhole, MessageCircle, RefreshCw, ShieldCheck, Sparkles, UserCircle, Users } from 'lucide-react';
+import type { Agent, AgentApplication } from '@/api';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
