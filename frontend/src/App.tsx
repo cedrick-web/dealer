@@ -13,6 +13,7 @@ import { EnquiriesView } from '@/components/app/enquiries-view';
 import { DashboardView } from '@/components/app/dashboard-view';
 import { DealWorkspaceView } from '@/components/app/deal-workspace';
 import { MessagingView } from '@/components/app/messaging-view';
+import { ListingReviewQueue } from '@/components/app/listing-review-queue';
 import { NotificationsView } from '@/components/app/notifications-view';
 import { AgentDirectoryView, AgentApplicationView, AgentReviewQueue, type AgentApplicationForm } from '@/components/app/agent-workspace';
 import { Textarea } from '@/components/ui/textarea';
@@ -606,8 +607,17 @@ export default function App() {
           </div>
         </section>}
 
-        {view==='admin'&&<section className="view-content">{user?.role!=='admin'?<EmptyState icon={LockKeyhole} title="Administrator access required" body="This queue is only available to an authenticated admin account."/>:pending.length?<div className="admin-list">{pending.map(item=><article className="panel review-card" key={item.publicId}><PropertyImage item={item} variant="mini"/><div className="review-body"><div className="listing-type">{item.propertyType} · {item.purpose}</div><h3>{item.title}</h3><p>{item.location.district}{item.location.sector?', '+item.location.sector:''} · {money(item.price.amount)}</p><p className="review-description">{item.description}</p><label className="field-label">Decision note<textarea rows={2} value={reviewNotes[item.publicId]||''} onChange={e=>setReviewNotes({...reviewNotes,[item.publicId]:e.target.value})} placeholder="Record what was checked, what is missing or what needs correction."/></label><div className="review-actions"><button className="btn btn-outline" onClick={()=>{setDocs([]);setModal(item)}}><FileCheck2 size={15}/>Review evidence</button><button className="btn btn-primary" onClick={()=>runReview(item,'approve')} disabled={busy}><CheckCircle2 size={15}/>Approve</button><button className="btn btn-outline" onClick={()=>runReview(item,'request_changes')} disabled={busy}>Request changes</button><button className="btn btn-danger" onClick={()=>runReview(item,'reject')} disabled={busy}>Reject</button></div></div></article>)}</div>:<EmptyState icon={ClipboardList} title="Review queue is clear" body="New submissions appear here when users send properties for review." action={()=>void withBusy(async()=>{const r=await api.adminPending();setPending(r.data)})} button="Refresh queue"/>}</section>}
-          {view==='agent-review'&&<AgentReviewQueue
+        {view==='admin'&&<ListingReviewQueue
+          userRole={user?.role}
+          pending={pending}
+          busy={busy}
+          notes={reviewNotes}
+          onNoteChange={(id,value)=>setReviewNotes(previous=>({...previous,[id]:value}))}
+          onReview={runReview}
+          onOpenEvidence={item=>{setDocs([]);setModal(item)}}
+          onRefresh={()=>void withBusy(async()=>{const r=await api.adminPending();setPending(r.data||[])})}
+        />}
+        {view==='agent-review'&&<AgentReviewQueue
           userRole={user?.role}
           pending={pendingAgents}
           busy={busy}
