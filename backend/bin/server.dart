@@ -814,6 +814,10 @@ Future<void> main() async {
     if (!['pending_review', 'changes_requested', 'rejected', 'published'].contains(listing['status'])) {
       return reply(409, {'error': 'Photos cannot be changed in this listing state.'});
     }
+    final currentImageCount = (listing['images'] as List? ?? []).length;
+    if (currentImageCount >= 6) {
+      return reply(409, {'error': 'A listing can have at most six photos. Remove a photo before uploading another.'});
+    }
     final b = await readJson(q, 11 * 1024 * 1024);
     if (b == null) return reply(413, {'error': 'Image request is too large or invalid. Maximum file size is 8 MiB.'});
     final fileName = clean(b['fileName'], 180);
@@ -863,6 +867,9 @@ Future<void> main() async {
     final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final listing = asMap(await listings.findOne(where.eq('publicId', listingId).eq('ownerId', c['sub'])));
     if (listing == null) return reply(404, {'error': 'Your listing was not found.'});
+    if (!['pending_review', 'changes_requested', 'rejected', 'published'].contains(listing['status'])) {
+      return reply(409, {'error': 'Photos cannot be changed in this listing state.'});
+    }
     final image = asMap(await listingImages.findOne(where.eq('publicId', imageId).eq('listingId', listingId).eq('uploadedBy', c['sub'])));
     if (image == null) return reply(404, {'error': 'Property photo not found.'});
     final current = List<dynamic>.from(listing['images'] as List? ?? []);
