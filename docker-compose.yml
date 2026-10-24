@@ -1,0 +1,32 @@
+services:
+  mongo:
+    image: mongo:8
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-dealer_admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set MONGO_ROOT_PASSWORD in .env}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-komisiyoneri}
+    volumes: [mongo_data:/data/db]
+    networks: [private]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')", "--username", "${MONGO_ROOT_USERNAME:-dealer_admin}", "--password", "${MONGO_ROOT_PASSWORD}", "--authenticationDatabase", "admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+  api:
+    build: ./backend
+    environment:
+      API_PORT: 8080
+      MONGO_URI: mongodb://${MONGO_ROOT_USERNAME:-dealer_admin}:${MONGO_ROOT_PASSWORD}@mongo:27017/${MONGO_DATABASE:-komisiyoneri}?authSource=admin
+    ports: ["8080:8080"]
+    depends_on:
+      mongo: {condition: service_healthy}
+    networks: [private]
+  frontend:
+    build: ./frontend
+    ports: ["5173:5173"]
+    depends_on: [api]
+networks:
+  private: {}
+volumes:
+  mongo_data: {}
