@@ -114,7 +114,16 @@ Keep reusable controls in \`src/components/ui/\`, business-focused UI in \`src/c
     │   │   ├── App.tsx               # Application composition and view state
     │   │   ├── api.ts                # Typed API client and session handling
     │   │   ├── components/
-    │   │   │   ├── app/              # Agent workflows, property cards, shared primitives and Motion transitions
+    │   │   │   ├── app/
+    │   │   │   │   ├── agent-workspace.tsx       # Agent directory, application and moderation views
+    │   │   │   │   ├── dashboard-view.tsx        # Typed account dashboard and activity table
+    │   │   │   │   ├── deal-workspace.tsx        # Commission acceptance and two-party completion
+    │   │   │   │   ├── enquiries-view.tsx        # Owner/requester enquiry workflow
+    │   │   │   │   ├── notifications-view.tsx    # Account notification center
+    │   │   │   │   ├── property-cards.tsx        # Listing cards and verified image fetching
+    │   │   │   │   ├── page-transition.tsx       # Motion page transition
+    │   │   │   │   ├── reveal.tsx                # Reduced-motion-aware reveal component
+    │   │   │   │   └── *.test.tsx                # Component/workflow regression tests
     │   │   │   └── ui/               # Reusable Radix/shadcn-style UI components and tests
     │   │   ├── lib/
     │   │   │   ├── utils.ts          # cn() Tailwind class composition
@@ -608,11 +617,12 @@ Before a public launch, add HTTPS end-to-end, credential rate limits and lockout
 ## Roadmap before a public launch
 
 - [x] Add Dart unit tests for validation, signed tokens, expiry, tampered signatures, file signatures, request-size enforcement and failed-login protection.
-- [x] Add frontend tests for API-empty states, search filter requests, responsive navigation and reusable UI primitives.
+- [x] Add frontend tests for API-empty states, search filter requests, responsive navigation, reusable UI primitives, agent approval screens, notification callbacks, owner enquiry status actions, deal completion states, dashboard data summaries and no-stock-photo handling.
 - [x] Add a Docker-backed API smoke test using a disposable MongoDB database for registration, moderation, public search and notification reads.
 - [ ] Expand runtime integration coverage to image/private-document upload, agent application/review, owner-side messaging, commission acceptance/completion and moderation edge cases.
 - [ ] Add browser end-to-end tests, keyboard-navigation testing and screenshot/responsive regression tests.
-- [ ] Continue moving the remaining dashboard, enquiries, messaging, deal and admin queue views out of `App.tsx` into typed page components as their integration tests are expanded.
+- [x] Extract dashboard, agent, enquiry, notification and commission pages into typed presentational components with callback-based API/state wiring.
+- [ ] Continue moving private messaging and property-admin moderation queue views out of `App.tsx`, adding focused integration tests as each page is extracted.
 - [ ] Move failed-login throttling from an in-process map to a shared rate limiter, add per-IP/API-wide request limits, account/email verification, password reset and audited session/device management.
 - [ ] Extend agent onboarding with evidence-backed identity checks, professional references and auditable reviewer checklists before making any regulated qualification claims.
 - [ ] Add signed contracts, consent versioning, downloadable receipts and dispute resolution designed with a legal professional.
