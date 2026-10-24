@@ -16,6 +16,9 @@ export type Deal = {
 };
 export type EvidenceDocument = { publicId: string; listingId: string; fileName: string; contentType: string; sizeBytes: number; createdAt: string; reviewStatus: string };
 export type ApiResult<T> = { data: T; [key: string]: unknown };
+export type Agent = { publicId:string; name:string; bio:string; districts:string[]; experienceYears:number; contactPhone?:string|null; updatedAt:string };
+export type AgentApplication = { publicId:string; userId:string; name:string; phone:string; showPhone:boolean; bio:string; districts:string[]; experienceYears:number; status:string; reviewNote?:string; createdAt:string; updatedAt:string };
+
 
 let sessionToken = localStorage.getItem(TOKEN_KEY) || '';
 export function setSessionToken(token: string) { sessionToken = token; if (token) localStorage.setItem(TOKEN_KEY, token); else localStorage.removeItem(TOKEN_KEY); }
@@ -37,6 +40,11 @@ const json = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.strin
 export const api = {
   health: () => request<{status:string;service:string;database:string}>('/health'),
   districts: () => request<ApiResult<string[]>>('/api/v1/districts'),
+  agents: () => request<ApiResult<Agent[]>>('/api/v1/agents'),
+  myAgentProfile: () => request<{data:AgentApplication|null}>('/api/v1/me/agent-profile'),
+  applyForAgent: (input:{phone:string;bio:string;experienceYears:number;districts:string[];showPhone:boolean}) => request<{data:AgentApplication;message:string}>('/api/v1/agents/apply', json(input)),
+  adminPendingAgents: () => request<ApiResult<AgentApplication[]>>('/api/v1/admin/agents/pending'),
+  adminReviewAgent: (id:string,decision:'approve'|'reject'|'request_changes',note:string) => request('/api/v1/admin/agents/' + encodeURIComponent(id) + '/review', {method:'PATCH',body:JSON.stringify({decision,note})}),
   listings: (params: Record<string,string> = {}) => {
     const query = new URLSearchParams(Object.entries(params).filter(([,v]) => Boolean(v)));
     const suffix = query.toString();
