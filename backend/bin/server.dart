@@ -12,6 +12,7 @@ final uid = const Uuid();
 final secret = Platform.environment['JWT_SECRET'] ?? 'development-only-change-me-before-deploying';
 final storageRoot = Platform.environment['DOCUMENT_STORAGE'] ?? '/data/private-documents';
 final webOrigin = Platform.environment['WEB_ORIGIN'] ?? 'http://localhost:5173';
+const rwandaDistricts = <String>['Gasabo','Kicukiro','Nyarugenge','Bugesera','Rwamagana','Kamonyi','Musanze','Rubavu','Huye','Muhanga','Rulindo','Rusizi','Gicumbi','Burera','Gakenke','Ngororero','Nyabihu','Rutsiro','Karongi','Nyagatare','Nyamasheke','Nyamagabe','Nyaruguru','Gisagara','Nyanza','Ruhango','Kirehe','Ngoma','Kayonza','Gatsibo'];
 
 Response reply(int status, Object body, [Map<String, String>? headers]) => Response(
   status, body: jsonEncode(body),
@@ -95,6 +96,7 @@ Future<void> main() async {
   final messages = db.collection('messages');
   final deals = db.collection('deals');
   final documents = db.collection('documents');
+  final agentApplications = db.collection('agent_applications');
 
   // Optional first-run admin bootstrap. Never expose an admin role in public registration.
   final adminEmail = (Platform.environment['BOOTSTRAP_ADMIN_EMAIL'] ?? '').trim().toLowerCase();
@@ -113,11 +115,18 @@ Future<void> main() async {
     final ping = await db.pingCommand();
     return reply(200, {'status': 'ok', 'service': 'komisiyoneri-api', 'database': ping.isNotEmpty ? 'connected' : 'unknown', 'time': now()});
   });
-  r.get('/api/v1/districts', (Request q) => reply(200, {'data': [
-    'Gasabo','Kicukiro','Nyarugenge','Bugesera','Rwamagana','Kamonyi','Musanze','Rubavu','Huye','Muhanga',
-    'Rulindo','Rusizi','Gicumbi','Burera','Gakenke','Ngororero','Nyabihu','Rutsiro','Karongi','Nyagatare',
-    'Nyamasheke','Nyamagabe','Nyaruguru','Gisagara','Nyanza','Ruhango','Kirehe','Ngoma','Kayonza','Gatsibo'
-  ]}));
+  r.get('/api/v1/districts', (Request q) => reply(200, {'data': rwandaDistricts}));
+  r.get('/api/v1/agents', (Request q) async {
+    final docs = await agentApplications.find(where.eq('status', 'approved'), sort: {'updatedAt': -1}, limit: 100).toList();
+    return reply(200, {'data': docs.map((raw) {
+      final d = Map<String, dynamic>.from(raw);
+      return <String, dynamic>{
+        'publicId': d['publicId'], 'name': d['name'], 'bio': d['bio'], 'districts': d['districts'],
+        'experienceYears': d['experienceYears'], 'contactPhone': d['showPhone'] == true ? d['phone'] : null,
+        'updatedAt': d['updatedAt'],
+      };
+    }).toList()});
+  });
 
   r.post('/api/v1/auth/register', (Request q) async {
     final b = await readJson(q, 20 * 1024);
@@ -159,6 +168,47 @@ Future<void> main() async {
     if (person == null || person['status'] != 'active') return unauthenticated();
     return reply(200, {'user': publicDoc(person)});
   });
+
+  r.get('/api/v1/me/agent-profile', (Request q) async {
+    final claims = userFrom(q); if (claims == null) return unauthenticated();
+    final rows = await agentApplications.find(where.eq('userId', claims['sub']), sort: {'updatedAt': -1}, limit: 1).toList();
+    return reply(200, {'data': rows.isEmpty ? null : publicDoc(Map<String, dynamic>.from(rows.first), includeReview: true)});
+  });
+  r.post('/api/v1/agents/apply', (Request q) async {
+    final claims = userFrom(q); if (claims == null) return unauthenticated();
+    final b = await readJson(q, 40 * 1024);
+    if (b == null) return reply(400, {'error': 'Send a valid JSON object.'});
+    final person = asMap(await users.findOne(where.eq('publicId', claims['sub'])));
+    if (person == null || person['status'] != 'active') return unauthenticated();
+    if (person['role'] == 'admin') return reply(403, {'error': 'Administrator accounts cannot apply for an agent listing.'});
+    if (person['role'] == 'agent' && await agentApplications.findOne(where.eq('userId', claims['sub']).eq('status', 'approved')) != null) {
+      return reply(409, {'error': 'Your agent profile is already approved. Contact support to request a profile change.'});
+    }
+    if (await agentApplications.findOne(where.eq('userId', claims['sub']).eq('status', 'pending_review')) != null) {
+      return reply(409, {'error': 'Your agent application is already awaiting review.'});
+    }
+    final phone = clean(b['phone'], 40);
+    final bio = clean(b['bio'], 1200);
+    final experienceRaw = b['experienceYears'];
+    final experience = experienceRaw is num ? experienceRaw.toInt() : int.tryParse('$experienceRaw');
+    final rawDistricts = b['districts'];
+    final selected = rawDistricts is List ? rawDistricts.whereType<String>().map((x) => clean(x, 60)).toSet().toList() : <String>[];
+    final showPhone = b['showPhone'] == true;
+    if (phone.length < 7 || bio.length < 50 || experience == null || experience < 0 || experience > 60 ||
+        selected.isEmpty || selected.length > 8 || !selected.every(rwandaDistricts.contains)) {
+      return reply(422, {'error': 'Provide a phone number, a 50+ character professional bio, 0–60 years of experience, and 1–8 valid Rwanda districts.'});
+    }
+    final at = now();
+    final item = {
+      'publicId': uid.v4(), 'userId': claims['sub'], 'name': clean(person['name'], 100),
+      'phone': phone, 'showPhone': showPhone, 'bio': bio, 'experienceYears': experience,
+      'districts': selected, 'status': 'pending_review', 'createdAt': at, 'updatedAt': at,
+    };
+    await agentApplications.insertOne(item);
+    await audit.insertOne({'eventId': uid.v4(), 'type': 'agent.application_submitted', 'subjectId': item['publicId'], 'actorId': claims['sub'], 'createdAt': at});
+    return reply(201, {'data': publicDoc(item, includeReview: true), 'message': 'Agent application sent for review. Your public profile will not appear until approved.'});
+  });
+
 
   r.get('/api/v1/listings', (Request q) async {
     final p = q.url.queryParameters;
@@ -232,6 +282,31 @@ Future<void> main() async {
     if (c['role'] != 'admin') return reply(403, {'error': 'Administrator access required.'});
     final docs = await listings.find(where.eq('status', 'pending_review'), sort: {'createdAt': 1}).limit(100).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
+  });
+
+  r.get('/api/v1/admin/agents/pending', (Request q) async {
+    final claims = userFrom(q); if (claims == null) return unauthenticated();
+    if (claims['role'] != 'admin') return reply(403, {'error': 'Administrator access required.'});
+    final docs = await agentApplications.find(where.eq('status', 'pending_review'), sort: {'createdAt': 1}).limit(100).toList();
+    return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d), includeReview: true)).toList()});
+  });
+  r.patch('/api/v1/admin/agents/<id>/review', (Request q, String id) async {
+    final claims = userFrom(q); if (claims == null) return unauthenticated();
+    if (claims['role'] != 'admin') return reply(403, {'error': 'Administrator access required.'});
+    final b = await readJson(q, 20 * 1024);
+    final decision = clean(b?['decision'], 20);
+    final note = clean(b?['note'], 1000);
+    if (!['approve', 'reject', 'request_changes'].contains(decision)) return reply(422, {'error': 'Decision must be approve, reject, or request_changes.'});
+    final application = asMap(await agentApplications.findOne(where.eq('publicId', id)));
+    if (application == null || !['pending_review', 'changes_requested'].contains(application['status'])) return reply(404, {'error': 'Open agent application not found.'});
+    final status = decision == 'approve' ? 'approved' : decision == 'reject' ? 'rejected' : 'changes_requested';
+    final at = now();
+    await agentApplications.updateOne(where.eq('publicId', id), modify.set('status', status).set('reviewNote', note).set('reviewedBy', claims['sub']).set('updatedAt', at));
+    if (decision == 'approve') {
+      await users.updateOne(where.eq('publicId', application['userId']), modify.set('role', 'agent'));
+    }
+    await audit.insertOne({'eventId': uid.v4(), 'type': 'agent.application_reviewed', 'subjectId': id, 'actorId': claims['sub'], 'decision': decision, 'note': note, 'createdAt': at});
+    return reply(200, {'id': id, 'status': status});
   });
 
   r.get('/api/v1/me/favorites', (Request q) async {
