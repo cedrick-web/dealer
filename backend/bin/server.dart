@@ -621,6 +621,10 @@ Future<void> main() async {
     final message = clean(b['message'], 1000);
     final preferredAt = clean(b['preferredAt'], 50);
     if (!['viewing', 'question', 'offer'].contains(type)) return reply(422, {'error': 'Lead type must be viewing, question or offer.'});
+    if (message.length < 5) return reply(422, {'error': 'Add a message of at least five characters.'});
+    if (preferredAt.isNotEmpty && DateTime.tryParse(preferredAt) == null) {
+      return reply(422, {'error': 'Preferred viewing time must be a valid date and time.'});
+    }
     final listing = asMap(await listings.findOne(where.eq('publicId', listingId).eq('status', 'published')));
     if (listing == null) return reply(404, {'error': 'Published property not found.'});
     if (listing['ownerId'] == c['sub']) return reply(422, {'error': 'You cannot create a buyer enquiry on your own listing.'});
@@ -935,6 +939,9 @@ Future<void> main() async {
     final listing = asMap(await listings.findOne(where.eq('publicId', listingId)));
     if (listing == null) return reply(404, {'error': 'Property not found.'});
     if (listing['ownerId'] != c['sub']) return reply(403, {'error': 'Only the listing owner can upload evidence.'});
+    if (!['pending_review', 'changes_requested', 'rejected', 'published'].contains(listing['status'])) {
+      return reply(409, {'error': 'Evidence cannot be changed for a withdrawn listing.'});
+    }
     final b = await readJson(q, 11 * 1024 * 1024);
     if (b == null) return reply(413, {'error': 'Document request is too large or invalid. Maximum file size is 8 MiB.'});
     final fileName = clean(b['fileName'], 180);
@@ -955,8 +962,20 @@ Future<void> main() async {
     final doc = {'publicId': id, 'listingId': listingId, 'uploadedBy': c['sub'], 'fileName': fileName, 'contentType': mime, 'sizeBytes': bytes.length, 'filePath': path, 'createdAt': now(), 'reviewStatus': 'not_reviewed'};
     await documents.insertOne(doc);
     final digest = sha256.convert(bytes).toString();
-    await audit.insertOne({'eventId': uid.v4(), 'type': 'document.uploaded', 'subjectId': id, 'actorId': c['sub'], 'evidenceHash': digest, 'createdAt': now()});
-    return reply(201, {'data': publicDoc(doc), 'sha256': digest, 'note': 'Stored privately. The digest proves a specific byte sequence was recorded, not that the document is genuine.'});
+    final at = now();
+    await listings.updateOne(where.eq('publicId', listingId).eq('ownerId', c['sub']), modify
+      .set('status', 'pending_review')
+      .set('verification', {'status': 'unverified', 'checks': []})
+      .set('reviewNote', '')
+      .set('reviewedBy', '')
+      .set('updatedAt', at));
+    await audit.insertOne({'eventId': uid.v4(), 'type': 'document.uploaded', 'subjectId': id, 'actorId': c['sub'], 'evidenceHash': digest, 'createdAt': at});
+    final admins = await users.find(where.eq('role', 'admin').eq('status', 'active')).toList();
+    for (final rawAdmin in admins) {
+      final admin = Map<String, dynamic>.from(rawAdmin);
+      await notifyUser(recipientId: admin['publicId']?.toString(), actorId: c['sub']?.toString(), type: 'listing_review', title: 'Property evidence added', body: 'A private evidence file was added to a listing and requires review.', destination: 'admin', subjectId: listingId);
+    }
+    return reply(201, {'data': publicDoc(doc), 'sha256': digest, 'status': 'pending_review', 'note': 'Stored privately. The digest proves a specific byte sequence was recorded, not that the document is genuine. The listing is back in review.'});
   });
   r.get('/api/v1/documents/<id>/download', (Request q, String id) async {
     final c = await currentUser(q, users); if (c == null) return unauthenticated();
