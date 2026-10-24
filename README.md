@@ -69,7 +69,7 @@ The repository is named **dealer** and the interface is currently branded **Deal
 | Web client | React, TypeScript, Vite, Lucide | Responsive marketplace, workspace, forms and interactions |
 | Installable app surface | Web App Manifest, service worker | Browser installation and a small cached app shell |
 | HTTP API | Dart 3, Shelf, Shelf Router | Validation, account/session handling and workflow endpoints |
-| Data store | MongoDB 8 | Accounts, property listings, favourites, leads, conversations, messages, deals and audit records |
+| Data store | MongoDB 7.0 | Accounts, property listings, favourites, leads, conversations, messages, deals and audit records |
 | Password hashing | BCrypt | One-way password hash storage |
 | API token | HMAC-SHA256 signed bearer token | Eight-hour session expiry |
 | Private files | Separate Docker volumes for private evidence and listing photos | Evidence bytes require authorization; photos are public only while the listing is published |
@@ -539,6 +539,7 @@ GitHub Actions runs a frontend dependency audit (blocking moderate-or-higher adv
 **API health returns an error or the browser says API offline**
 - Check docker compose ps and docker compose logs --tail 150 api.
 - Ensure MongoDB is healthy and the API container can reach the mongo service.
+- The Compose stack pins MongoDB to the 7.0 series for compatibility with Linux 6.19 CI/runtime kernels, where MongoDB 8.0+ currently exits during startup. Reassess this pin when the deployment kernel is supported by a fixed MongoDB release.
 - Confirm JWT_SECRET is set and MONGO_ROOT_PASSWORD matches the credentials used by the persistent Mongo volume.
 - If you changed the root password after MongoDB was first initialized, updating .env alone does not update the existing database user's password.
 
