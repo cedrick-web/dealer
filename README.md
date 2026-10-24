@@ -38,7 +38,7 @@ The repository is named **dealer** and the interface is currently branded **Deal
 - Register and sign in using email and password.
 - Passwords are hashed using BCrypt; the API returns a signed, expiring bearer token.
 - Submit property listings for human review, edit and resubmit corrections, or withdraw a listing. Text changes and image changes pause public visibility until a moderator reviews the new version.
-- Upload up to six real property photos per listing. JPEG, PNG and WebP are checked against their file signatures, stored in a separate persistent volume, and served only for published listings or to an authorized owner/admin while a listing is private. Images use explicit seller-photo versus illustrative-image labels; fallback imagery is never represented as the actual home.
+- Upload up to six real property photos per listing. JPEG, PNG and WebP are checked against their file signatures, stored in a separate persistent volume, and served only for published listings or to an authorized owner/admin while a listing is private. Uploaded images are explicitly labelled as seller photos. If a listing has no uploaded photos, the UI shows a no-photo state instead of substituting stock imagery.
 - Request a property viewing or send a question/offer lead; owners can mark enquiries contacted, accepted, declined or completed, and requesters can cancel eligible requests.
 - Receive in-app notifications for review decisions, incoming enquiries, messages, agent-application reviews and deal events. Notifications have per-account read state and unread counts.
 - Update the account name/phone and change the password. Changing a password increases a token version so older bearer sessions are rejected by the API.
@@ -118,7 +118,7 @@ Keep reusable controls in \`src/components/ui/\`, business-focused UI in \`src/c
     │   │   │   └── ui/               # Reusable Radix/shadcn-style UI components and tests
     │   │   ├── lib/
     │   │   │   ├── utils.ts          # cn() Tailwind class composition
-    │   │   │   └── property-format.ts # Currency, stages and illustrative images
+    │   │   │   └── property-format.ts # Currency and stage formatting
     │   │   ├── main.tsx              # React entry and service-worker registration
     │   │   ├── styles.css            # Existing responsive styles during migration
     │   │   └── tailwind.css          # Tailwind v4 design tokens
@@ -332,7 +332,7 @@ Property photos use a different storage and access policy from titles, IDs and c
 - Upload and removal endpoints verify the listing owner. Photos are recorded in a dedicated listing_images collection and the listing_images Docker volume.
 - Public photo delivery checks that the photo is still attached to a listing and only serves it without authentication when that listing is published. For a private or pending listing, the caller must be the owner or an administrator.
 - Adding or removing a photo moves the listing back to pending_review and resets its platform review status. A photo change must not leave an old approval attached to a different set of images.
-- The frontend marks seller-uploaded images and explicitly labels fallback illustrations. Illustrations are not evidence of the condition or appearance of an actual property.
+- The frontend shows seller-uploaded photographs only when the API supplies them. Listings without photos display an explicit no-photo state, not generic stock imagery. A photo is not proof of legal ownership or the current condition of a property.
 
 This implementation checks MIME type, size and a small file signature. It is not an image malware scanner, metadata scrubber or image-processing pipeline. For production, add decoding/re-encoding, pixel/dimension limits, EXIF metadata stripping, moderation workflows for image contents and managed private/object storage with backup/retention controls.
 
