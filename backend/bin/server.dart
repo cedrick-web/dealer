@@ -243,7 +243,7 @@ Future<void> main() async {
   });
   r.get('/api/v1/districts', (Request q) => reply(200, {'data': rwandaDistricts}));
   r.get('/api/v1/agents', (Request q) async {
-    final docs = await agentApplications.find(where.eq('status', 'approved'), sort: {'updatedAt': -1}, limit: 100).toList();
+    final docs = await agentApplications.modernFind(selector: where.eq('status', 'approved'), sort: {'updatedAt': -1}, limit: 100).toList();
     return reply(200, {'data': docs.map((raw) {
       final d = Map<String, dynamic>.from(raw);
       return <String, dynamic>{
@@ -302,7 +302,7 @@ Future<void> main() async {
     final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final p = q.url.queryParameters;
     final limit = (int.tryParse(p['limit'] ?? '50') ?? 50).clamp(1, 100).toInt();
-    final docs = await notifications.find(where.eq('userId', c['sub']), limit: limit, sort: {'createdAt': -1}).toList();
+    final docs = await notifications.modernFind(selector: where.eq('userId', c['sub']), limit: limit, sort: {'createdAt': -1}).toList();
     final unread = await notifications.count(where.eq('userId', c['sub']).eq('readAt', null));
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList(), 'unreadCount': unread});
   });
@@ -371,7 +371,7 @@ Future<void> main() async {
 
   r.get('/api/v1/me/agent-profile', (Request q) async {
     final claims = await currentUser(q, users); if (claims == null) return unauthenticated();
-    final rows = await agentApplications.find(where.eq('userId', claims['sub']), sort: {'updatedAt': -1}, limit: 1).toList();
+    final rows = await agentApplications.modernFind(selector: where.eq('userId', claims['sub']), sort: {'updatedAt': -1}, limit: 1).toList();
     return reply(200, {'data': rows.isEmpty ? null : publicDoc(Map<String, dynamic>.from(rows.first), includeReview: true)});
   });
   r.post('/api/v1/agents/apply', (Request q) async {
@@ -435,7 +435,7 @@ Future<void> main() async {
     if (max != null && max > 0) filter['price.amount'] = {'$lte': max};
     final page = (int.tryParse(p['page'] ?? '1') ?? 1).clamp(1, 100000).toInt();
     final limit = (int.tryParse(p['limit'] ?? '24') ?? 24).clamp(1, 60).toInt();
-    final docs = await listings.find(filter, limit: limit, skip: (page - 1) * limit, sort: {'createdAt': -1}).toList();
+    final docs = await listings.modernFind(filter: filter, limit: limit, skip: (page - 1) * limit, sort: {'createdAt': -1}).toList();
     final items = docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList();
     final total = await listings.count(filter);
     return reply(200, {'data': items, 'page': page, 'limit': limit, 'total': total, 'hasMore': page * limit < total});
@@ -479,7 +479,7 @@ Future<void> main() async {
   });
   r.get('/api/v1/me/listings', (Request q) async {
     final c = await currentUser(q, users); if (c == null) return unauthenticated();
-    final docs = await listings.find(where.eq('ownerId', c['sub']), sort: {'createdAt': -1}).toList();
+    final docs = await listings.modernFind(selector: where.eq('ownerId', c['sub']), sort: {'createdAt': -1}).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d), includeReview: true)).toList()});
   });
 
@@ -563,14 +563,14 @@ Future<void> main() async {
   r.get('/api/v1/admin/listings/pending', (Request q) async {
     final c = await currentUser(q, users); if (c == null) return unauthenticated();
     if (c['role'] != 'admin') return reply(403, {'error': 'Administrator access required.'});
-    final docs = await listings.find(where.eq('status', 'pending_review'), sort: {'createdAt': 1}).limit(100).toList();
+    final docs = await listings.modernFind(selector: where.eq('status', 'pending_review'), sort: {'createdAt': 1}, limit: 100).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
 
   r.get('/api/v1/admin/agents/pending', (Request q) async {
     final claims = await currentUser(q, users); if (claims == null) return unauthenticated();
     if (claims['role'] != 'admin') return reply(403, {'error': 'Administrator access required.'});
-    final docs = await agentApplications.find(where.eq('status', 'pending_review'), sort: {'createdAt': 1}).limit(100).toList();
+    final docs = await agentApplications.modernFind(selector: where.eq('status', 'pending_review'), sort: {'createdAt': 1}, limit: 100).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d), includeReview: true)).toList()});
   });
   r.patch('/api/v1/admin/agents/<id>/review', (Request q, String id) async {
@@ -636,7 +636,7 @@ Future<void> main() async {
   });
   r.get('/api/v1/me/leads', (Request q) async {
     final c = await currentUser(q, users); if (c == null) return unauthenticated();
-    final all = await leads.find(where.eq('requesterId', c['sub']).or(where.eq('ownerId', c['sub'])), sort: {'createdAt': -1}).toList();
+    final all = await leads.modernFind(selector: where.eq('requesterId', c['sub']).or(where.eq('ownerId', c['sub'])), sort: {'createdAt': -1}).toList();
     return reply(200, {'data': all.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
 
@@ -674,7 +674,7 @@ Future<void> main() async {
 
   r.get('/api/v1/me/conversations', (Request q) async {
     final c = await currentUser(q, users); if (c == null) return unauthenticated();
-    final docs = await conversations.find(where.eq('participants', c['sub']), sort: {'updatedAt': -1}).toList();
+    final docs = await conversations.modernFind(selector: where.eq('participants', c['sub']), sort: {'updatedAt': -1}).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
   r.post('/api/v1/conversations', (Request q) async {
@@ -729,7 +729,7 @@ Future<void> main() async {
     final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final room = asMap(await conversations.findOne(where.eq('publicId', id).eq('participants', c['sub'])));
     if (room == null) return reply(404, {'error': 'Conversation not found.'});
-    final docs = await messages.find(where.eq('conversationId', id), sort: {'createdAt': 1}).limit(300).toList();
+    final docs = await messages.modernFind(selector: where.eq('conversationId', id), sort: {'createdAt': 1}, limit: 300).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
   r.post('/api/v1/conversations/<id>/messages', (Request q, String id) async {
@@ -750,7 +750,7 @@ Future<void> main() async {
 
   r.get('/api/v1/me/deals', (Request q) async {
     final c = await currentUser(q, users); if (c == null) return unauthenticated();
-    final docs = await deals.find(where.eq('participants', c['sub']), sort: {'updatedAt': -1}).toList();
+    final docs = await deals.modernFind(selector: where.eq('participants', c['sub']), sort: {'updatedAt': -1}).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
   r.post('/api/v1/deals', (Request q) async {
@@ -960,7 +960,7 @@ Future<void> main() async {
     final isAdmin = c['role'] == 'admin';
     final inDeal = await deals.findOne(where.eq('listingId', listingId).eq('participants', c['sub'])) != null;
     if (!isOwner && !isAdmin && !inDeal) return reply(403, {'error': 'Only the listing owner, an administrator reviewer or a deal participant can view document metadata.'});
-    final docs = await documents.find(where.eq('listingId', listingId), sort: {'createdAt': -1}).toList();
+    final docs = await documents.modernFind(selector: where.eq('listingId', listingId), sort: {'createdAt': -1}).toList();
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
   });
   r.post('/api/v1/listings/<listingId>/documents', (Request q, String listingId) async {
