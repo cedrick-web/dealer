@@ -6,9 +6,9 @@ import {
   LogOut, MapPin, Menu, MessageCircle, MoreHorizontal, Plus, RefreshCw, Search, Send, Settings,
   ShieldCheck, SlidersHorizontal, Sparkles, Upload, UserCircle, Users, WalletCards, X
 } from 'lucide-react';
-import { api, type Agent, type AgentApplication, type Conversation, type Deal, type EvidenceDocument, type Lead, type Listing, type Message, type User, setSessionToken } from './api';
+import { api, type Agent, type AgentApplication, type AppNotification, type Conversation, type Deal, type EvidenceDocument, type Lead, type Listing, type Message, type User, setSessionToken } from './api';
 
-type View = 'discover'|'agents'|'agent-application'|'agent-review'|'dashboard'|'new-listing'|'my-listings'|'saved'|'messages'|'deals'|'trust'|'account'|'admin';
+type View = 'discover'|'agents'|'agent-application'|'agent-review'|'notifications'|'dashboard'|'new-listing'|'my-listings'|'saved'|'messages'|'deals'|'trust'|'account'|'admin';
 type AuthMode = 'login'|'register';
 const money = (amount:number) => new Intl.NumberFormat('en-RW',{style:'currency',currency:'RWF',maximumFractionDigits:0}).format(amount || 0);
 const dateLabel = (value?:string) => value ? new Date(value).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}) : 'Not recorded';
@@ -53,6 +53,8 @@ export default function App() {
   const [savedIds,setSavedIds] = useState<string[]>([]);
   const [savedItems,setSavedItems] = useState<Listing[]>([]);
   const [leads,setLeads] = useState<Lead[]>([]);
+  const [notifications,setNotifications] = useState<AppNotification[]>([]);
+  const [unreadCount,setUnreadCount] = useState(0);
   const [conversations,setConversations] = useState<Conversation[]>([]);
   const [messages,setMessages] = useState<Message[]>([]);
   const [deals,setDeals] = useState<Deal[]>([]);
@@ -98,13 +100,14 @@ export default function App() {
   },[]);
   const refreshWorkspace = useCallback(async (activeUser:User) => {
     const safe = async <T,>(fn:()=>Promise<T>, fallback:T) => { try { return await fn(); } catch { return fallback; } };
-    const [owned,favorites,leadData,rooms,dealData,agentData] = await Promise.all([
+    const [owned,favorites,leadData,rooms,dealData,agentData,notificationData] = await Promise.all([
       safe(()=>api.myListings(),{data:[] as Listing[]}),
       safe(()=>api.favorites(),{data:[] as {listingId:string;createdAt:string}[]}),
       safe(()=>api.myLeads(),{data:[] as Lead[]}),
       safe(()=>api.conversations(),{data:[] as Conversation[]}),
       safe(()=>api.deals(),{data:[] as Deal[]}),
       safe(()=>api.myAgentProfile(),{data:null as AgentApplication|null}),
+      safe(()=>api.notifications(),{data:[] as AppNotification[],unreadCount:0}),
     ]);
     setMyItems(owned.data || []);
     setSavedIds((favorites.data || []).map(x=>x.listingId));
@@ -112,6 +115,8 @@ export default function App() {
     setConversations(rooms.data || []);
     setDeals(dealData.data || []);
     setAgentApplication(agentData.data);
+    setNotifications(notificationData.data || []);
+    setUnreadCount(notificationData.unreadCount || 0);
     if(agentData.data) setAgentForm({phone:agentData.data.phone||'',bio:agentData.data.bio||'',experienceYears:String(agentData.data.experienceYears??0),districts:agentData.data.districts||['Gasabo'],showPhone:agentData.data.showPhone===true});
     const detailResults = await Promise.all((favorites.data || []).map(x=>safe(()=>api.listing(x.listingId),null as any)));
     setSavedItems(detailResults.filter(Boolean).map((x:any)=>x.data).filter(Boolean));
@@ -180,6 +185,23 @@ export default function App() {
       setView(active.role==='admin'?'admin':returnView);flash(t('Signed in securely.','Winjiye neza.'));
     });
   };
+  const markNotificationRead = (item:AppNotification) => void withBusy(async()=>{
+    if(!item.readAt) {
+      await api.markNotificationRead(item.publicId);
+      setNotifications(previous=>previous.map(n=>n.publicId===item.publicId?{...n,readAt:new Date().toISOString()}:n));
+      setUnreadCount(value=>Math.max(0,value-1));
+    }
+    const allowed:View[]=['discover','agents','agent-application','agent-review','dashboard','new-listing','my-listings','saved','messages','deals','trust','account','admin','notifications'];
+    navTo(allowed.includes(item.destination as View)?item.destination as View:'notifications');
+  });
+  const markAllNotificationsRead = () => void withBusy(async()=>{
+    if(unreadCount===0)return;
+    await api.markAllNotificationsRead();
+    const at=new Date().toISOString();
+    setNotifications(previous=>previous.map(n=>({...n,readAt:n.readAt||at})));
+    setUnreadCount(0);
+    flash('All notifications marked as read.');
+  });
   const signOut = () => { setSessionToken('');setUser(null);setMyItems([]);setSavedIds([]);setSavedItems([]);setLeads([]);setConversations([]);setMessages([]);setDeals([]);setAgentApplication(null);setPendingAgents([]);setPending([]);setView('discover');flash(t('You have signed out.','Wasohotse muri konti.')); };
   const saveListing = (item:Listing) => {
     if(!requireUser()) return;
@@ -268,6 +290,7 @@ export default function App() {
     {id:'agent-application',label:t('Become an agent','Ba umuhuza'),icon:BadgeCheck,group:'Workspace'},
     {id:'my-listings',label:t('My listings','Imitungo yanjye'),icon:Building2,group:'Workspace'},
     {id:'saved',label:t('Saved properties','Ibyabitswe'),icon:Heart,group:'Workspace'},
+    {id:'notifications',label:t('Notifications','Ibimenyesha'),icon:Bell,group:'Workspace'},
     {id:'messages',label:t('Messages','Ubutumwa'),icon:MessageCircle,group:'Workspace'},
     {id:'deals',label:t('Deals & fees','Amasezerano'),icon:WalletCards,group:'Workspace'},
     {id:'trust',label:t('Evidence checker','Igenzura ry’inyandiko'),icon:ShieldCheck,group:'Tools'},
@@ -279,6 +302,7 @@ export default function App() {
     agents:{title:t('Meet reviewed property agents','Abahuza bemejwe'),subtitle:t('Explore agent profiles, service areas and experience. Public contact details appear only with the agent’s consent.')},
     'agent-application':{title:t('Become a property agent','Ba umuhuza w’imitungo'),subtitle:t('Submit a professional profile for human review. Approval is required before the profile becomes public.')},
     'agent-review':{title:t('Agent application review','Igenzura ry’abahuza'),subtitle:t('Review applicant experience, service districts and contact consent before approving a public profile.')},
+    notifications:{title:t('Notifications and updates','Ibimenyesha n’amakuru'),subtitle:t('Track listing reviews, new enquiries, conversations and deal milestones from your account.')},
     dashboard:{title:t('Your property workspace','Ahantu hakurikirana imitungo yawe'),subtitle:t('Keep your listings, conversations, viewing requests and deal milestones in one place.')},
     'new-listing':{title:t('Create a property listing','Shyiraho itangazo ry’umutungo'),subtitle:t('Submissions stay private until the review team approves them.')},
     'my-listings':{title:t('Your listings','Amatangazo yawe'),subtitle:t('See review status and continue preparing the evidence for every property.')},
@@ -295,7 +319,7 @@ export default function App() {
     <header className="app-header">
       <button className="brand" onClick={()=>navTo('discover')} aria-label="Go to discover"><span className="brand-mark"><House size={22}/></span><span className="brand-name">DEALER<small>PROPERTY, WITH PROOF.</small></span></button>
       <div className="header-search"><Search size={17}/><input aria-label="Search properties" placeholder={t('Search by district, neighborhood or property','Shakisha ahantu cyangwa umutungo')} value={search} onChange={e=>{setSearch(e.target.value);setView('discover')}}/><kbd>⌕</kbd></div>
-      <div className="header-actions"><button className="locale-button" onClick={()=>setLanguage(language==='en'?'rw':'en')}><Globe2 size={16}/><span>{language==='en'?'EN':'RW'}</span></button><span className={'api-pill '+(apiOnline?'online':'offline')}><i/>{apiOnline?'API online':'API offline'}</span>{user?<button className="avatar-button" onClick={()=>navTo('account')} title={user.email}>{user.name.slice(0,1).toUpperCase()}</button>:<button className="btn btn-primary btn-sm" onClick={()=>{setAuthMode('login');setAuthOpen(true)}}><LogIn size={15}/>{t('Sign in','Injira')}</button>}<button className="mobile-toggle" onClick={()=>setMobileNav(x=>!x)} aria-label="Toggle navigation"><Menu size={21}/></button></div>
+      <div className="header-actions"><button className="notification-trigger" onClick={()=>navTo('notifications')} aria-label={'Notifications, '+unreadCount+' unread'} title="Notifications"><Bell size={18}/>{unreadCount>0&&<span>{unreadCount>99?'99+':unreadCount}</span>}</button><button className="locale-button" onClick={()=>setLanguage(language==='en'?'rw':'en')}><Globe2 size={16}/><span>{language==='en'?'EN':'RW'}</span></button><span className={'api-pill '+(apiOnline?'online':'offline')}><i/>{apiOnline?'API online':'API offline'}</span>{user?<button className="avatar-button" onClick={()=>navTo('account')} title={user.email}>{user.name.slice(0,1).toUpperCase()}</button>:<button className="btn btn-primary btn-sm" onClick={()=>{setAuthMode('login');setAuthOpen(true)}}><LogIn size={15}/>{t('Sign in','Injira')}</button>}<button className="mobile-toggle" onClick={()=>setMobileNav(x=>!x)} aria-label="Toggle navigation"><Menu size={21}/></button></div>
     </header>
     <div className="app-body">
       <aside className={'sidebar '+(mobileNav?'sidebar-open':'')}>
@@ -331,6 +355,11 @@ export default function App() {
             <><div className="form-grid"><Field label="Phone number for review"><input required minLength={7} maxLength={40} value={agentForm.phone} onChange={e=>setAgentForm({...agentForm,phone:e.target.value})} placeholder="+250…"/></Field><Field label="Years of experience"><input required type="number" min="0" max="60" step="1" value={agentForm.experienceYears} onChange={e=>setAgentForm({...agentForm,experienceYears:e.target.value})}/></Field><Field label="Professional biography" wide><textarea required minLength={50} maxLength={1200} rows={5} value={agentForm.bio} onChange={e=>setAgentForm({...agentForm,bio:e.target.value})} placeholder="Describe your property experience, professional approach, local knowledge and how you help buyers or sellers make informed decisions."/><small className="field-help">{agentForm.bio.length}/1200 characters. Do not claim a licence, verification or qualification you do not hold.</small></Field><div className="field field-wide"><span>Service districts</span><div className="district-picker">{districts.map(d=><label key={d} className="district-option"><input type="checkbox" checked={agentForm.districts.includes(d)} onChange={e=>setAgentForm(prev=>({...prev,districts:e.target.checked?Array.from(new Set([...prev.districts,d])):prev.districts.filter(x=>x!==d)}))}/><span>{d}</span></label>)}</div><small className="field-help">Select between 1 and 8 districts where you can realistically serve clients. Selected: {agentForm.districts.length}/8</small></div><label className="public-phone-option"><input type="checkbox" checked={agentForm.showPhone} onChange={e=>setAgentForm({...agentForm,showPhone:e.target.checked})}/><span><b>Show my phone in the public directory</b><small>By opting in, you consent to displaying this number on your approved public profile. Otherwise, it stays private to the application review.</small></span></label></div><div className="review-explainer"><LockKeyhole size={18}/><div><b>Review is not a government licence</b><p>Submitting this form does not grant agent credentials. Platform staff will review it before the profile appears. Provide only information you are comfortable sharing with the review team.</p></div></div><div className="form-footer"><span>By submitting, you confirm the profile is accurate and that you have permission to share the phone number.</span><button className="btn btn-primary" disabled={busy||agentForm.districts.length<1||agentForm.districts.length>8} type="submit">{busy?'Submitting…':'Submit agent application'}<ArrowRight size={16}/></button></div></>}
           </form>
           <aside className="panel side-checklist"><div className="checklist-icon"><ShieldCheck size={22}/></div><h3>What reviewers look for</h3><p>Quality and honesty matter more than marketing claims.</p>{['A clear, specific professional biography','Realistic service areas and contact details','Accurate experience claims','Consent before publishing a phone number','Willingness to record fee terms and deal milestones'].map((x,i)=><div className="checklist-item" key={x}><span>{i+1}</span>{x}</div>)}<div className="tip-box"><Sparkles size={16}/><span>Only approved profiles appear in the public directory. Approval does not establish legal qualifications or guarantee a transaction.</span></div></aside>
+        </section>}
+
+        {view==='notifications'&&<section className="view-content notifications-view">
+          <div className="notifications-toolbar"><div><span className="count-pill">{unreadCount} unread</span><span className="notifications-caption">Notifications stay attached to your account, not this device.</span></div><button className="btn btn-outline btn-sm" disabled={busy||unreadCount===0} onClick={markAllNotificationsRead}><Check size={14}/>Mark all read</button></div>
+          {notifications.length?<div className="notification-list">{notifications.map(item=><button className={'notification-card '+(!item.readAt?'unread':'')} key={item.publicId} onClick={()=>markNotificationRead(item)}><span className={'notification-icon '+item.type.replaceAll('_','-')}><NotificationIcon type={item.type}/></span><span className="notification-copy"><span className="notification-top"><b>{item.title}</b><small>{dateLabel(item.createdAt)}</small></span><p>{item.body}</p><small className="notification-destination">{prettyStage(item.destination)} <ArrowUpRight size={12}/></small></span>{!item.readAt&&<i className="unread-dot" aria-label="Unread"/>}</button>)}</div>:<EmptyState icon={Bell} title="You're up to date" body="New viewing requests, messages, listing decisions and commission milestones will appear here." action={()=>navTo('discover')} button="Explore properties"/>}
         </section>}
 
         {view==='dashboard'&&<section className="view-content">
@@ -375,6 +404,13 @@ function Field({label,children,wide=false}:{label:string;children:ReactNode;wide
 }
 function Metric({icon:Icon,label,value,detail}:{icon:any;label:string;value:number|string;detail:string}) {
   return <div className="metric-card"><span className="metric-icon"><Icon size={18}/></span><div><small>{label}</small><strong>{value}</strong><span>{detail}</span></div><ArrowUpRight className="metric-arrow" size={15}/></div>;
+}
+function NotificationIcon({type}:{type:string}) {
+  if(type==='message'||type==='conversation')return <MessageCircle size={18}/>;
+  if(type==='listing_review'||type==='agent_review')return <ShieldCheck size={18}/>;
+  if(type==='lead')return <CalendarClock size={18}/>;
+  if(type==='deal'||type==='deal_stage'||type==='fee_acceptance')return <WalletCards size={18}/>;
+  return <Bell size={18}/>;
 }
 function StatusPill({value}:{value:string}) {
   const type=['published','completed','active','approve','approved','reviewed'].includes(value)?'good':['pending_review','proposed','open','viewing','offer','due_diligence','agreement','changes_requested'].includes(value)?'waiting':['rejected','cancelled'].includes(value)?'bad':'neutral';
