@@ -12,7 +12,6 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl libstdc++6 \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY --from=build /runtime/ /
 COPY --from=build /app/bin/server /app/server
 RUN mkdir -p /data/private-documents /data/listing-images && chown -R 10001:10001 /data/private-documents /data/listing-images /app
 USER 10001:10001
