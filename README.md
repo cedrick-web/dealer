@@ -29,7 +29,7 @@ The repository is named **dealer** and the interface is currently branded **Deal
 
 ### Marketplace
 - Browse **published** properties only. Unreviewed or rejected submissions are not exposed through the public listing endpoint.
-- Filter by sale/rent, district and property type; search titles, descriptions and localities; sort by price or recency.
+- Filter by sale/rent, district, property type and maximum RWF price; search titles, descriptions and localities; sort by price or recency on the API; load additional results using server pagination.
 - View locality, asking price, description and the disclosed review state.
 - Save and remove favourites using account-backed records that can follow the user across devices.
 - Show explicit empty and API-offline states instead of inventing inventory and presenting it as real property.
@@ -368,14 +368,16 @@ JSON errors use an error field and an appropriate HTTP status. Protected endpoin
 |---|---|---|---|
 | GET | /health | Public | API and MongoDB ping |
 | GET | /api/v1/districts | Public | District catalogue |
-| GET | /api/v1/listings | Public | Published property search; supports district, type, purpose, maxPrice, page and limit |
+| GET | /api/v1/listings | Public | Published property search; supports q, district, type, purpose, maxPrice, sort, page and limit |
 | GET | /api/v1/listings/:id | Public | Published property detail |
 | GET | /api/v1/agents | Public | Approved agent directory; phone appears only with explicit consent |
 | GET | /api/v1/trust/verify/:hash | Public | Check if a digest exists in the audit log |
 
-Example listing search:
+Example listing search and sorting:
 
-    Invoke-RestMethod "http://localhost:8080/api/v1/listings?purpose=sale&district=Gasabo&limit=12"
+    Invoke-RestMethod "http://localhost:8080/api/v1/listings?q=house&purpose=sale&district=Gasabo&maxPrice=200000000&sort=price-low&page=1&limit=12"
+
+Supported sort values: `newest` (default), `oldest`, `price-low`, and `price-high`. Page is one-based and limit is clamped by the API to 60. The response includes `page`, `limit`, `total` and `hasMore`; the client uses these fields to load the next page instead of silently stopping at the first batch.
 
 ### Authentication
 
@@ -554,7 +556,7 @@ Vite will display the local development URL. In development the app is served wi
     docker compose config
     docker compose up --build
 
-GitHub Actions runs a frontend dependency audit (blocking moderate-or-higher advisories), frontend application/component tests and the production build, Dart analysis and tests, an API route-contract check, a Docker-backed MongoDB/API/frontend runtime smoke test, and Electron shell syntax/manifest checks. The runtime smoke test covers registration, private-by-default listing submissions, admin approval, published detail/search and administrator notification reads. It does not yet exercise every image upload, private document, conversation, agent approval or commission/deal edge case. Check the Actions tab for the current result; a committed workflow is not proof that checks passed.
+GitHub Actions runs a frontend dependency audit (blocking moderate-or-higher advisories), frontend application/component tests and the production build, Dart analysis and tests, an API route-contract check, a Docker-backed MongoDB/API/frontend runtime smoke test, and Electron shell syntax/manifest checks. The runtime smoke test covers registration, private-by-default listing submissions, admin approval, published detail, search, server-side price ordering, page-two offsets and administrator notification reads. It does not yet exercise every image upload, private document, conversation, agent approval or commission/deal edge case. Check the Actions tab for the current result; a committed workflow is not proof that checks passed.
 
 ## Checks and troubleshooting
 
