@@ -9,6 +9,35 @@ import 'package:shelf_router/shelf_router.dart';
 import 'package:uuid/uuid.dart';
 
 final uid = const Uuid();
+const maxLoginFailures = 8;
+const loginFailureWindow = Duration(minutes: 15);
+final Map<String, List<DateTime>> loginFailures = <String, List<DateTime>>{};
+
+List<DateTime> recentLoginFailures(String key) {
+  final cutoff = DateTime.now().subtract(loginFailureWindow);
+  final recent = (loginFailures[key] ?? <DateTime>[]).where((at) => at.isAfter(cutoff)).toList();
+  if (recent.isEmpty) {
+    loginFailures.remove(key);
+  } else {
+    loginFailures[key] = recent;
+  }
+  return recent;
+}
+bool loginIsThrottled(String key) => recentLoginFailures(key).length >= maxLoginFailures;
+void recordLoginFailure(String key) {
+  final recent = recentLoginFailures(key)..add(DateTime.now());
+  loginFailures[key] = recent;
+  // Bound memory growth when attackers rotate through arbitrary email strings.
+  if (loginFailures.length > 10000) {
+    final staleKeys = loginFailures.keys.take(1000).toList();
+    for (final staleKey in staleKeys) { loginFailures.remove(staleKey); }
+  }
+}
+void clearLoginFailures(String key) => loginFailures.remove(key);
+bool passwordMatches(String password, dynamic passwordHash) {
+  if (passwordHash is! String || passwordHash.isEmpty) return false;
+  try { return BCrypt.checkpw(password, passwordHash); } catch (_) { return false; }
+}
 final secret = Platform.environment['JWT_SECRET'] ?? 'development-only-change-me-before-deploying';
 final storageRoot = Platform.environment['DOCUMENT_STORAGE'] ?? '/data/private-documents';
 final allowedWebOrigins = (Platform.environment['WEB_ORIGINS'] ?? Platform.environment['WEB_ORIGIN'] ?? 'http://localhost:5173,dealer://app').split(',').map((value) => value.trim()).where((value) => value.isNotEmpty).toSet();
@@ -162,7 +191,7 @@ Future<void> main() async {
   // Optional first-run admin bootstrap. Never expose an admin role in public registration.
   final adminEmail = (Platform.environment['BOOTSTRAP_ADMIN_EMAIL'] ?? '').trim().toLowerCase();
   final adminPassword = Platform.environment['BOOTSTRAP_ADMIN_PASSWORD'] ?? '';
-  if (adminEmail.isNotEmpty && adminPassword.length >= 14 && !adminPassword.startsWith('CHANGE_ME') && await users.findOne(where.eq('email', adminEmail)) == null) {
+  if (adminEmail.isNotEmpty && adminPassword.length >= 14 && utf8.encode(adminPassword).length <= 72 && !adminPassword.startsWith('CHANGE_ME') && await users.findOne(where.eq('email', adminEmail)) == null) {
     await users.insertOne({
       'publicId': uid.v4(), 'name': 'Platform administrator', 'email': adminEmail,
       'passwordHash': BCrypt.hashpw(adminPassword, BCrypt.gensalt()), 'role': 'admin',
@@ -214,11 +243,20 @@ Future<void> main() async {
     if (b == null) return reply(400, {'error': 'Send a valid JSON object.'});
     final email = clean(b['email'], 160).toLowerCase();
     final password = b['password'] is String ? b['password'] as String : '';
-    if (utf8.encode(password).length > 72) return reply(401, {'error': 'Email or password is incorrect.'});
-    final person = asMap(await users.findOne(where.eq('email', email)));
-    if (person == null || person['status'] != 'active' || !BCrypt.checkpw(password, person['passwordHash'] as String? ?? '')) {
+    final throttleKey = email.isEmpty ? '<empty-email>' : email;
+    if (loginIsThrottled(throttleKey)) {
+      return reply(429, {'error': 'Too many sign-in attempts. Wait 15 minutes before trying again.'}, {'retry-after': '900'});
+    }
+    if (utf8.encode(password).length > 72) {
+      recordLoginFailure(throttleKey);
       return reply(401, {'error': 'Email or password is incorrect.'});
     }
+    final person = asMap(await users.findOne(where.eq('email', email)));
+    if (person == null || person['status'] != 'active' || !passwordMatches(password, person['passwordHash'])) {
+      recordLoginFailure(throttleKey);
+      return reply(401, {'error': 'Email or password is incorrect.'});
+    }
+    clearLoginFailures(throttleKey);
     final role = person['role'] as String? ?? 'member';
     final token = issueToken({'sub': person['publicId'], 'email': email, 'role': role, 'exp': DateTime.now().millisecondsSinceEpoch ~/ 1000 + 60 * 60 * 8});
     return reply(200, {'token': token, 'user': publicDoc(person), 'expiresIn': 28800});
@@ -703,7 +741,7 @@ Future<void> main() async {
   stdout.writeln('KOMISIYONERI API listening on ' + server.port.toString());
 }
 ).hasMatch(email) || password.length < 10 || utf8.encode(password).length > 72) {
-      return reply(422, {'error': 'Enter your name, a valid email, and a password of at least 10 characters.'});
+      return reply(422, {'error': 'Enter your name, a valid email, and a password of 10–72 UTF-8 bytes.'});
     }
     if (await users.findOne(where.eq('email', email)) != null) return reply(409, {'error': 'An account with that email already exists.'});
     final person = {
