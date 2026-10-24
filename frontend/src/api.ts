@@ -39,7 +39,8 @@ export const api = {
   districts: () => request<ApiResult<string[]>>('/api/v1/districts'),
   listings: (params: Record<string,string> = {}) => {
     const query = new URLSearchParams(Object.entries(params).filter(([,v]) => Boolean(v)));
-    return request<ApiResult<Listing[]> & {page:number;limit:number;total:number;hasMore:boolean}>('/api/v1/listings' + (query.size ? '?' + query.toString() : ''));
+    const suffix = query.toString();
+    return request<ApiResult<Listing[]> & {page:number;limit:number;total:number;hasMore:boolean}>('/api/v1/listings' + (suffix ? '?' + suffix : ''));
   },
   listing: (id:string) => request<ApiResult<Listing>>('/api/v1/listings/' + encodeURIComponent(id)),
   register: async (input:{name:string;email:string;password:string;phone?:string}) => {
@@ -50,7 +51,7 @@ export const api = {
     const data = await request<{token:string;user:User}>('/api/v1/auth/login', json(input));
     setSessionToken(data.token); return data.user;
   },
-  me: () => request<ApiResult<User>>('/api/v1/auth/me').then(x => x.user),
+  me: () => request<{user:User}>('/api/v1/auth/me').then(x => x.user),
   myListings: () => request<ApiResult<Listing[]>>('/api/v1/me/listings'),
   createListing: (input:Partial<Listing>) => request<{id:string;status:string;message:string;evidenceHash:string}>('/api/v1/listings', json(input)),
   favorites: () => request<ApiResult<{listingId:string;createdAt:string}[]>>('/api/v1/me/favorites'),
