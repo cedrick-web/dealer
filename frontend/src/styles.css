@@ -83,3 +83,6 @@
 
 .property-dialog-content{border-radius:14px!important}.property-dialog-content [data-slot="dialog-close"]{position:fixed;right:calc(max(1rem,(100vw - 56rem)/2 + 1rem));top:max(1rem,calc((100vh - 92vh)/2 + 1rem));height:36px;width:36px;display:grid;place-items:center;border:1px solid #e4e9e0;border-radius:50%;background:#fff;color:#5f7162;opacity:1;z-index:8;box-shadow:0 4px 16px #1c35231c}.property-dialog-content [data-slot="dialog-close"]:hover{background:#edf3ea;color:#174b3c}
 @media(max-width:720px){.property-dialog-content{width:calc(100% - 1rem)!important;max-width:none!important;max-height:calc(100dvh - 1rem)!important;border-radius:10px!important}.property-dialog-content [data-slot="dialog-close"]{position:fixed;top:9px;right:9px;width:34px;height:34px}}
+
+.agent-profile-reveal{height:100%;min-width:0}.agent-profile-reveal>.agent-profile-card{height:100%}
+@media(prefers-reduced-motion:reduce){.agent-profile-reveal{transform:none}}
