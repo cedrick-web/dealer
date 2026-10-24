@@ -16,11 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
           cache-dependency-path: frontend/package.json
       - name: Install dependencies
@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Set up Dart
         uses: dart-lang/setup-dart@v1
         with:
@@ -61,7 +61,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Check for duplicate or missing routes
         run: python scripts/check_api_routes.py
 
@@ -81,7 +81,7 @@ jobs:
       BOOTSTRAP_ADMIN_PASSWORD: CI_Admin_Password_12345
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Validate Docker Compose configuration
         run: docker compose config -q
       - name: Build and start the complete stack
@@ -156,7 +156,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Validate Electron main process syntax
         run: node --check desktop/main.cjs
       - name: Validate desktop package manifest
