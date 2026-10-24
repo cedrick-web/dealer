@@ -261,7 +261,7 @@ Future<void> main() async {
     final email = clean(b['email'], 160).toLowerCase();
     final password = b['password'] is String ? b['password'] as String : '';
     final phone = clean(b['phone'], 40);
-    if (name.length < 2 || !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+
+    if (name.length < 2 || !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email) || password.length < 10 || utf8.encode(password).length > 72) {
       return reply(422, {'error': 'Enter your name, a valid email, and a password of 10–72 UTF-8 bytes.'});
     }
     if (await users.findOne(where.eq('email', email)) != null) return reply(409, {'error': 'An account with that email already exists.'});
