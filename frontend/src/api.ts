@@ -61,6 +61,12 @@ export const api = {
     setSessionToken(data.token); return data.user;
   },
   me: () => request<{user:User}>('/api/v1/auth/me').then(x => x.user),
+  updateProfile: (input:{name:string;phone:string}) => request<{user:User}>('/api/v1/me/profile', {method:'PATCH',body:JSON.stringify(input)}),
+  changePassword: async (input:{currentPassword:string;newPassword:string}) => {
+    const result = await request<{token:string;user:User;expiresIn:number}>('/api/v1/me/password', {method:'PATCH',body:JSON.stringify(input)});
+    setSessionToken(result.token);
+    return result;
+  },
   notifications: () => request<ApiResult<AppNotification[]> & {unreadCount:number}>('/api/v1/me/notifications?limit=100'),
   markNotificationRead: (id:string) => request('/api/v1/notifications/' + encodeURIComponent(id) + '/read', {method:'PATCH',body:JSON.stringify({})}),
   markAllNotificationsRead: () => request('/api/v1/me/notifications/read-all', json({})),
