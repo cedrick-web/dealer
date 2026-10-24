@@ -105,25 +105,32 @@ Keep reusable controls in \`src/components/ui/\`, business-focused UI in \`src/c
 
     dealer/
     ├── backend/
-    │   ├── bin/server.dart          # Dart HTTP API and workflow handlers
-    │   ├── pubspec.yaml             # Dart packages
-    │   └── Dockerfile               # Compiled Dart API image
+    │   ├── bin/server.dart           # Dart HTTP API and workflow handlers
+    │   ├── test/                     # Dart helper/security tests
+    │   ├── pubspec.yaml              # Dart packages
+    │   └── Dockerfile                # Compiled, non-root API image
     ├── frontend/
     │   ├── src/
-    │   │   ├── api.ts               # Typed API client and session handling
-    │   │   ├── App.tsx              # Marketplace and workspace screens
-    │   │   ├── main.tsx             # React entry and service-worker registration
-    │   │   └── styles.css           # Responsive design system
-    │   ├── public/
-    │   │   ├── icon.svg
-    │   │   ├── manifest.webmanifest
-    │   │   └── sw.js
-    │   ├── Dockerfile               # Optimized static web build
-    │   └── nginx.conf               # SPA fallback and response headers
+    │   │   ├── App.tsx               # Application composition and view state
+    │   │   ├── api.ts                # Typed API client and session handling
+    │   │   ├── components/
+    │   │   │   ├── app/              # Property cards, shared app primitives, Motion transitions
+    │   │   │   └── ui/               # Reusable Radix/shadcn-style UI components and tests
+    │   │   ├── lib/
+    │   │   │   ├── utils.ts          # cn() Tailwind class composition
+    │   │   │   └── property-format.ts # Currency, stages and illustrative images
+    │   │   ├── main.tsx              # React entry and service-worker registration
+    │   │   ├── styles.css            # Existing responsive styles during migration
+    │   │   └── tailwind.css          # Tailwind v4 design tokens
+    │   ├── components.json           # Component configuration and path aliases
+    │   ├── public/                   # PWA icon, manifest and service worker
+    │   ├── Dockerfile                # Optimized static web build
+    │   └── nginx.conf                # SPA fallback and response headers
     ├── desktop/
-    │   ├── main.cjs                 # Secure Electron shell
-    │   └── package.json             # Desktop installer targets
-    ├── .github/workflows/quality.yml # Frontend build and Dart analysis
+    │   ├── main.cjs                  # Secure Electron shell
+    │   └── package.json              # Desktop installer targets
+    ├── scripts/check_api_routes.py   # Duplicate/missing route contract check
+    ├── .github/workflows/quality.yml # Audit, tests, Docker smoke test and desktop checks
     ├── .env.example                 # Environment template; no production secrets
     ├── docker-compose.yml           # Local multi-container stack
     └── README.md
@@ -547,7 +554,7 @@ Vite will display the local development URL. In development the app is served wi
     docker compose config
     docker compose up --build
 
-GitHub Actions runs a frontend dependency audit (blocking moderate-or-higher advisories), frontend unit tests and the production build, Dart analysis and tests, a route-contract script that detects duplicate/missing critical endpoints, and Electron shell syntax/manifest checks. Check the Actions tab for actual results. A committed workflow is not proof that checks passed.
+GitHub Actions runs a frontend dependency audit (blocking moderate-or-higher advisories), frontend application/component tests and the production build, Dart analysis and tests, an API route-contract check, a Docker-backed MongoDB/API/frontend runtime smoke test, and Electron shell syntax/manifest checks. The runtime smoke test covers registration, private-by-default listing submissions, admin approval, published detail/search and administrator notification reads. It does not yet exercise every image upload, private document, conversation, agent approval or commission/deal edge case. Check the Actions tab for the current result; a committed workflow is not proof that checks passed.
 
 ## Checks and troubleshooting
 
@@ -598,10 +605,11 @@ Before a public launch, add HTTPS end-to-end, credential rate limits and lockout
 
 ## Roadmap before a public launch
 
-- [x] Add Dart unit tests for validation, signed tokens, expiry, tampered signatures and failed-login protection.
-- [x] Add frontend tests for empty API states and responsive navigation, plus a CI route-contract checker.
-- [ ] Add API integration tests against a disposable MongoDB database and browser-level end-to-end tests.
-- [ ] Add frontend component tests, keyboard-navigation tests and responsive browser tests.
+- [x] Add Dart unit tests for validation, signed tokens, expiry, tampered signatures, file signatures, request-size enforcement and failed-login protection.
+- [x] Add frontend tests for API-empty states, search filter requests, responsive navigation and reusable UI primitives.
+- [x] Add a Docker-backed API smoke test using a disposable MongoDB database for registration, moderation, public search and notification reads.
+- [ ] Expand runtime integration coverage to image/private-document upload, agent application/review, owner-side messaging, commission acceptance/completion and moderation edge cases.
+- [ ] Add browser end-to-end tests, keyboard-navigation testing and screenshot/responsive regression tests.
 - [ ] Move failed-login throttling from an in-process map to a shared rate limiter, add per-IP/API-wide request limits, account/email verification, password reset and audited session/device management.
 - [ ] Extend agent onboarding with evidence-backed identity checks, professional references and auditable reviewer checklists before making any regulated qualification claims.
 - [ ] Add signed contracts, consent versioning, downloadable receipts and dispute resolution designed with a legal professional.
