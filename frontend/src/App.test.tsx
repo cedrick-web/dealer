@@ -66,8 +66,8 @@ describe('Dealer application shell', () => {
   it('uses empty results honestly while allowing the buy and rent filter controls', async () => {
     render(<App />);
     await screen.findByText('No published properties match yet');
-    screen.getByRole('button', { name: 'Rent' }).click();
+    screen.getByRole('tab', { name: 'Rent' }).click();
     expect(screen.getByRole('button', { name: 'Rent' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Buy' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Buy' })).toBeTruthy();
   });
 });
