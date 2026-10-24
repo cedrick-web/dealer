@@ -5,7 +5,7 @@ export type User = { publicId: string; name: string; email: string; phone?: stri
 export type Listing = {
   publicId: string; ownerId?: string; title: string; description: string; propertyType: 'house'|'apartment'|'land'|'commercial'|'room';
   purpose: 'sale'|'rent'; location: { district: string; sector?: string }; price: { amount: number; currency?: string; period?: string };
-  status?: string; verification?: { status: string; checks?: unknown[] }; createdAt?: string;
+  status?: string; reviewNote?: string; reviewedBy?: string; verification?: { status: string; checks?: unknown[] }; createdAt?: string;
 };
 export type Lead = { publicId: string; listingId: string; listingTitle: string; ownerId: string; requesterId: string; type: string; message?: string; preferredAt?: string; status: string; createdAt: string };
 export type Conversation = { publicId: string; listingId: string; listingTitle: string; participants: string[]; ownerId: string; lastMessage?: string; updatedAt: string };
