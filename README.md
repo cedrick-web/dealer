@@ -4,12 +4,13 @@ Dealer is a Rwanda-focused property marketplace and deal-workspace foundation. I
 
 The repository is named **dealer** and the interface is currently branded **Dealer**. Before a public launch, confirm naming and trademark availability. The earlier name Komisiyoneri is already used by a property service in Rwanda; do not assume that brand is available.
 
-> **Deployment status:** this is an actively developed, API-connected foundation, not a certified production conveyancing or financial service. The main workflows have API routes, but the project still needs automated integration tests, external security review, malware scanning for uploads, email verification and recovery, rate limiting, monitored backups, production TLS and legal review before handling real customers or documents.
+> **Deployment status:** this is an actively developed, API-connected marketplace foundation, not a certified conveyancing or financial service. CI builds and starts the Docker stack against a temporary MongoDB database and smoke-tests registration, listing moderation, public search and account notifications. The wider application still needs full end-to-end coverage for every workflow, external security review, malware scanning, email/password recovery, shared rate limiting, monitored backups, production TLS and legal review before handling real customers or sensitive title documents.
 
 ## Table of contents
 
 - [Product capabilities](#product-capabilities)
 - [Architecture](#architecture)
+- [Frontend design system](#frontend-design-system)
 - [Repository layout](#repository-layout)
 - [Run locally with Docker Desktop](#run-locally-with-docker-desktop)
 - [Open the app](#open-the-app)
@@ -66,7 +67,9 @@ The repository is named **dealer** and the interface is currently branded **Deal
 
 | Layer | Technology | Responsibility |
 |---|---|---|
-| Web client | React, TypeScript, Vite, Lucide | Responsive marketplace, workspace, forms and interactions |
+| Web client | React 18, TypeScript, Vite 8, Lucide | Responsive marketplace, workspace, forms and interactions |
+| Design system | Tailwind CSS v4, locally owned shadcn-style components, Radix UI | Design tokens, accessible dialogs/menus/tabs, forms, badges, cards and tables |
+| Motion | Motion for React | Reduced-motion-aware route transitions, card interaction and reveal components |
 | Installable app surface | Web App Manifest, service worker | Browser installation and a small cached app shell |
 | HTTP API | Dart 3, Shelf, Shelf Router | Validation, account/session handling and workflow endpoints |
 | Data store | MongoDB 7.0 | Accounts, property listings, favourites, leads, conversations, messages, deals and audit records |
@@ -85,6 +88,18 @@ The repository is named **dealer** and the interface is currently branded **Deal
 5. The API checks the token and, for protected routes, verifies the user's access to the target property, conversation, deal or document.
 6. MongoDB stores structured records; uploaded files live in the private evidence volume. File paths are never exposed by API responses.
 7. Important submission, review, deal and upload actions create audit events.
+
+## Frontend design system
+
+The frontend is being migrated incrementally to reusable components. The existing \`styles.css\` design system remains active while new screens and primitives use Tailwind and shared component contracts. That avoids a risky all-at-once rewrite of working API flows.
+
+- **Tailwind CSS v4** is configured through \`@tailwindcss/vite\` and \`src/tailwind.css\`. Shared CSS variables define the green/neutral palette, foregrounds, cards, borders, focus rings and radius tokens. The Tailwind import uses important utilities so utility classes can layer predictably alongside the legacy, unlayered CSS during migration.
+- **shadcn-style components** are owned in \`src/components/ui/\` and composed from Radix primitives where keyboard, focus and dialog behavior matter. \`components.json\` stores the shared aliases and style settings. Components include Button, Card, Input, Textarea, Badge, Label, Separator, Dialog, Tabs, DropdownMenu, Table, Tooltip and Skeleton.
+- **\`cn()\`** in \`src/lib/utils.ts\` combines conditional classes and resolves Tailwind utility conflicts with \`clsx\` and \`tailwind-merge\`.
+- **Motion for React** is used for page transitions and listing-card interaction. \`MotionConfig\` respects the user's reduced-motion preference, and the reusable Reveal component disables reveal movement when reduced motion is requested.
+- **Business screens use the real API client.** Property cards, image previews, common form/status elements and money/stage formatting have dedicated modules. Skeletons appear while the approved-agent API call is loading. No fake property cards are silently inserted when the listing API is empty or offline.
+
+Keep reusable controls in \`src/components/ui/\`, business-focused UI in \`src/components/app/\`, shared typed request functions in \`src/api.ts\`, and non-UI formatting in \`src/lib/\`. Do not put API secrets in Vite environment variables; all \`VITE_*\` values are public browser configuration.
 
 ## Repository layout
 
