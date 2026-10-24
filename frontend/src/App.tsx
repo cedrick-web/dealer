@@ -227,6 +227,15 @@ export default function App() {
     return ()=>{alive=false};
   },[refreshWorkspace]);
   useEffect(()=>{const timer=window.setTimeout(()=>{refreshListings().catch(()=>{})},250);return()=>window.clearTimeout(timer)},[refreshListings]);
+  const refreshNotifications = useCallback(async() => {
+    try {
+      const result=await api.notifications();
+      setNotifications(result.data||[]);
+      setUnreadCount(result.unreadCount||0);
+    } catch {
+      // The main workspace still works if the notification service is briefly unavailable.
+    }
+  },[]);
   useEffect(()=>{if(view==='messages'&&selectedConversation)refreshMessages(selectedConversation)},[view,selectedConversation,refreshMessages]);
   useEffect(()=>{
     if(view!=='messages'||!user)return;
@@ -261,15 +270,6 @@ export default function App() {
     if(!user) { setAuthMode('login');setAuthOpen(true); setReturnView(target || view); if(target) setView(target); return false; }
     return true;
   };
-  const refreshNotifications = useCallback(async() => {
-    try {
-      const result=await api.notifications();
-      setNotifications(result.data||[]);
-      setUnreadCount(result.unreadCount||0);
-    } catch {
-      // The main workspace still works if the notification service is briefly unavailable.
-    }
-  },[]);
   const navTo = (target:View) => {
     setMobileNav(false);
     if(['dashboard','enquiries','new-listing','my-listings','saved','messages','deals','account','admin','agent-application','agent-review','notifications'].includes(target) && !user) { setReturnView(target); setAuthMode('login'); setAuthOpen(true); setView(target==='new-listing'?'discover':target); return; }
@@ -500,20 +500,20 @@ export default function App() {
   ];
   const heading:{[key in View]:{title:string;subtitle:string}}={
     discover:{title:t('Find a property with a clearer record.','Shaka umutungo ufite amakuru asobanutse.'),subtitle:t('Explore public listings, compare options and ask questions before making commitments.','Reba amatangazo rusange kandi ubaze mbere yo kwiyemeza.')},
-    agents:{title:t('Meet reviewed property agents','Abahuza bemejwe'),subtitle:t('Explore agent profiles, service areas and experience. Public contact details appear only with the agent’s consent.')},
-    'agent-application':{title:t('Become a property agent','Ba umuhuza w’imitungo'),subtitle:t('Submit a professional profile for human review. Approval is required before the profile becomes public.')},
-    'agent-review':{title:t('Agent application review','Igenzura ry’abahuza'),subtitle:t('Review applicant experience, service districts and contact consent before approving a public profile.')},
-    notifications:{title:t('Notifications and updates','Ibimenyesha n’amakuru'),subtitle:t('Track listing reviews, new enquiries, conversations and deal milestones from your account.')},
-    enquiries:{title:t('Enquiries, offers and viewings','Ibibazo, ibyifuzo no gusura'),subtitle:t('Process viewing requests, respond to prospective buyers and keep each enquiry status visible to both parties.')},
-    dashboard:{title:t('Your property workspace','Ahantu hakurikirana imitungo yawe'),subtitle:t('Keep your listings, conversations, viewing requests and deal milestones in one place.')},
-    'new-listing':{title:t('Create a property listing','Shyiraho itangazo ry’umutungo'),subtitle:t('Submissions stay private until the review team approves them.')},
-    'my-listings':{title:t('Your listings','Amatangazo yawe'),subtitle:t('See review status and continue preparing the evidence for every property.')},
-    saved:{title:t('Saved properties','Imitungo wabitse'),subtitle:t('Your shortlist stays attached to your account across devices.')},
-    messages:{title:t('Private conversations','Ubutumwa bwihariye'),subtitle:t('Keep deal-related questions attached to the property they concern.')},
-    deals:{title:t('Deal room & commission terms','Amasezerano na komisiyo'),subtitle:t('Track milestones, record fee acceptance and keep the activity history readable.')},
-    trust:{title:t('Evidence hash checker','Igenzura ry’ibimenyetso'),subtitle:t('Check whether this platform recorded a particular content digest. It cannot validate legal ownership.')},
-    account:{title:t('Account settings','Imiterere ya konti'),subtitle:t('Manage session details and review your current access role.')},
-    admin:{title:t('Listing review queue','Amatangazo agomba kugenzurwa'),subtitle:t('Review submitted listings and record a clear decision and note.')},
+    agents:{title:t('Meet reviewed property agents','Abahuza bemejwe'),subtitle:t('Explore agent profiles, service areas and experience. Public contact details appear only with the agent’s consent.','Reba imyirondoro y’abahuza, aho bakorera n’uburambe bwabo. Nimero zabo zigaragara gusa iyo babyemeye.')},
+    'agent-application':{title:t('Become a property agent','Ba umuhuza w’imitungo'),subtitle:t('Submit a professional profile for human review. Approval is required before the profile becomes public.','Ohereza umwirondoro w’umwuga kugira ngo ugenzurwe n’abantu. Uzashyirwa ku mugaragaro ari uko wemejwe.')},
+    'agent-review':{title:t('Agent application review','Igenzura ry’abahuza'),subtitle:t('Review applicant experience, service districts and contact consent before approving a public profile.','Genza uburambe bw’usaba, uturere akoreramo n’uruhushya rwo kugaragaza telefoni mbere yo kwemeza umwirondoro.')},
+    notifications:{title:t('Notifications and updates','Ibimenyesha n’amakuru'),subtitle:t('Track listing reviews, new enquiries, conversations and deal milestones from your account.','Kurikirana igenzura ry’amatangazo, ibibazo bishya, ubutumwa n’intambwe z’amasezerano muri konti yawe.')},
+    enquiries:{title:t('Enquiries, offers and viewings','Ibibazo, ibyifuzo no gusura'),subtitle:t('Process viewing requests, respond to prospective buyers and keep each enquiry status visible to both parties.','Subiza ibyifuzo byo gusura, ganira n’abaguzi bashobora kuza kandi ureke impande zombi zibone uko ikibazo gihagaze.')},
+    dashboard:{title:t('Your property workspace','Ahantu hakurikirana imitungo yawe'),subtitle:t('Keep your listings, conversations, viewing requests and deal milestones in one place.','Bika amatangazo yawe, ibiganiro, ibyifuzo byo gusura n’intambwe z’amasezerano ahantu hamwe.')},
+    'new-listing':{title:t('Create a property listing','Shyiraho itangazo ry’umutungo'),subtitle:t('Submissions stay private until the review team approves them.','Amatangazo akomeza kuba ibanga kugeza igihe itsinda rishinzwe igenzura riyemeje.')},
+    'my-listings':{title:t('Your listings','Amatangazo yawe'),subtitle:t('See review status and continue preparing the evidence for every property.','Reba uko amatangazo agenzurwa kandi ukomeze gutegura ibimenyetso kuri buri mutungo.')},
+    saved:{title:t('Saved properties','Imitungo wabitse'),subtitle:t('Your shortlist stays attached to your account across devices.','Imitungo wabitse iboneka muri konti yawe ku bikoresho bitandukanye.')},
+    messages:{title:t('Private conversations','Ubutumwa bwihariye'),subtitle:t('Keep deal-related questions attached to the property they concern.','Bika ibibazo bijyanye n’amasezerano ku mutungo bireba.')},
+    deals:{title:t('Deal room & commission terms','Amasezerano na komisiyo'),subtitle:t('Track milestones, record fee acceptance and keep the activity history readable.','Kurikirana intambwe z’amasezerano, wandike ukwemera komisiyo kandi ubike amateka y’ibikorwa asobanutse.')},
+    trust:{title:t('Evidence hash checker','Igenzura ry’ibimenyetso'),subtitle:t('Check whether this platform recorded a particular content digest. It cannot validate legal ownership.','Reba niba uru rubuga rwarabitse ikimenyetso cy’inyandiko. Ibi ntibyemeza uburenganzira bwemewe n’amategeko ku mutungo.')},
+    account:{title:t('Account settings','Imiterere ya konti'),subtitle:t('Manage session details and review your current access role.','Genzura ibyerekeye igihe winjiriye n’uruhushya ufite muri konti yawe.')},
+    admin:{title:t('Listing review queue','Amatangazo agomba kugenzurwa'),subtitle:t('Review submitted listings and record a clear decision and note.','Genza amatangazo yoherejwe maze wandike icyemezo n’inyandiko ibisobanura.')},
   };
   const title=view==='new-listing'&&editingListingId?{title:'Update property listing',subtitle:'Changes return to human review before the property can appear publicly again.'}:heading[view];
 
