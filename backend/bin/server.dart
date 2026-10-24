@@ -49,9 +49,11 @@ bool hasAllowedFileSignature(String mime, List<int> bytes) {
   }
   if (mime == 'image/png') {
     const signature = [137, 80, 78, 71, 13, 10, 26, 10];
-    return bytes.length >= signature.length &&
-      List<int>.generate(signature.length, (index) => bytes[index])
-        .asMap().entries.every((entry) => entry.value == signature[entry.key]);
+    if (bytes.length < signature.length) return false;
+    for (var index = 0; index < signature.length; index++) {
+      if (bytes[index] != signature[index]) return false;
+    }
+    return true;
   }
   if (mime == 'image/webp') {
     return bytes.length >= 12 && bytes[0] == 82 && bytes[1] == 73 && bytes[2] == 70 && bytes[3] == 70 &&
