@@ -11,7 +11,7 @@ import 'package:uuid/uuid.dart';
 final uid = const Uuid();
 final secret = Platform.environment['JWT_SECRET'] ?? 'development-only-change-me-before-deploying';
 final storageRoot = Platform.environment['DOCUMENT_STORAGE'] ?? '/data/private-documents';
-final webOrigin = Platform.environment['WEB_ORIGIN'] ?? 'http://localhost:5173';
+final allowedWebOrigins = (Platform.environment['WEB_ORIGINS'] ?? Platform.environment['WEB_ORIGIN'] ?? 'http://localhost:5173,dealer://app').split(',').map((value) => value.trim()).where((value) => value.isNotEmpty).toSet();
 const rwandaDistricts = <String>['Gasabo','Kicukiro','Nyarugenge','Bugesera','Rwamagana','Kamonyi','Musanze','Rubavu','Huye','Muhanga','Rulindo','Rusizi','Gicumbi','Burera','Gakenke','Ngororero','Nyabihu','Rutsiro','Karongi','Nyagatare','Nyamasheke','Nyamagabe','Nyaruguru','Gisagara','Nyanza','Ruhango','Kirehe','Ngoma','Kayonza','Gatsibo'];
 
 Response reply(int status, Object body, [Map<String, String>? headers]) => Response(
@@ -503,19 +503,20 @@ Future<void> main() async {
   });
 
   final handler = Pipeline().addMiddleware(logRequests()).addMiddleware((inner) => (req) async {
-    if (req.method == 'OPTIONS') return Response(204, headers: {
-      'access-control-allow-origin': webOrigin,
+    final origin = req.headers['origin'];
+    final allowOrigin = origin != null && allowedWebOrigins.contains(origin) ? origin : null;
+    final corsHeaders = <String, String>{
+      if (allowOrigin != null) 'access-control-allow-origin': allowOrigin,
       'access-control-allow-methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
       'access-control-allow-headers': 'Origin, Content-Type, Accept, Authorization',
       'access-control-max-age': '600',
       'vary': 'Origin',
-    });
+    };
+    if (req.method == 'OPTIONS') return Response(204, headers: corsHeaders);
     final res = await inner(req);
     return res.change(headers: {
-      'access-control-allow-origin': webOrigin,
-      'access-control-allow-methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-      'access-control-allow-headers': 'Origin, Content-Type, Accept, Authorization',
-      'vary': 'Origin', 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY',
+      ...corsHeaders,
+      'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY',
       'referrer-policy': 'no-referrer', 'cache-control': 'no-store',
     });
   }).addHandler(r.call);
@@ -805,8 +806,9 @@ Future<void> main() async {
     final listing = asMap(await listings.findOne(where.eq('publicId', doc['listingId'])));
     final owner = listing?['ownerId'] == c['sub'];
     final uploader = doc['uploadedBy'] == c['sub'];
+    final isAdmin = c['role'] == 'admin';
     final inDeal = await deals.findOne(where.eq('listingId', doc['listingId']).eq('participants', c['sub'])) != null;
-    if (!owner && !uploader && !inDeal) return reply(403, {'error': 'You are not authorized to download this document.'});
+    if (!owner && !uploader && !isAdmin && !inDeal) return reply(403, {'error': 'You are not authorized to download this document.'});
     final file = File(doc['filePath'] as String);
     if (!await file.exists()) return reply(410, {'error': 'The private document file is no longer available.'});
     return Response.ok(await file.readAsBytes(), headers: {
