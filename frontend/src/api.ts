@@ -18,6 +18,7 @@ export type EvidenceDocument = { publicId: string; listingId: string; fileName: 
 export type ApiResult<T> = { data: T; [key: string]: unknown };
 export type Agent = { publicId:string; name:string; bio:string; districts:string[]; experienceYears:number; contactPhone?:string|null; updatedAt:string };
 export type AgentApplication = { publicId:string; userId:string; name:string; phone:string; showPhone:boolean; bio:string; districts:string[]; experienceYears:number; status:string; reviewNote?:string; createdAt:string; updatedAt:string };
+export type AppNotification = { publicId:string; type:string; title:string; body:string; destination:string; subjectId?:string|null; readAt?:string|null; createdAt:string };
 
 
 let sessionToken = localStorage.getItem(TOKEN_KEY) || '';
@@ -60,6 +61,9 @@ export const api = {
     setSessionToken(data.token); return data.user;
   },
   me: () => request<{user:User}>('/api/v1/auth/me').then(x => x.user),
+  notifications: () => request<ApiResult<AppNotification[]> & {unreadCount:number}>('/api/v1/me/notifications?limit=100'),
+  markNotificationRead: (id:string) => request('/api/v1/notifications/' + encodeURIComponent(id) + '/read', {method:'PATCH',body:JSON.stringify({})}),
+  markAllNotificationsRead: () => request('/api/v1/me/notifications/read-all', json({})),
   myListings: () => request<ApiResult<Listing[]>>('/api/v1/me/listings'),
   createListing: (input:Partial<Listing>) => request<{id:string;status:string;message:string;evidenceHash:string}>('/api/v1/listings', json(input)),
   favorites: () => request<ApiResult<{listingId:string;createdAt:string}[]>>('/api/v1/me/favorites'),
