@@ -1,5 +1,3 @@
-import type { Listing } from '@/api';
-
 export const money = (amount: number) =>
   new Intl.NumberFormat('en-RW', {
     style: 'currency',
