@@ -519,6 +519,7 @@ Vite will display the local development URL. In development the app is served wi
 ### Build and static analysis
 
     # From frontend/
+    npm audit --audit-level=moderate
     npm run test
     npm run build
 
@@ -531,7 +532,7 @@ Vite will display the local development URL. In development the app is served wi
     docker compose config
     docker compose up --build
 
-GitHub Actions runs frontend unit tests and the production build, Dart analysis and tests, plus a route-contract script that detects duplicate/missing critical endpoints. Check the Actions tab for actual results. A committed workflow is not proof that checks passed.
+GitHub Actions runs a frontend dependency audit (blocking moderate-or-higher advisories), frontend unit tests and the production build, Dart analysis and tests, a route-contract script that detects duplicate/missing critical endpoints, and Electron shell syntax/manifest checks. Check the Actions tab for actual results. A committed workflow is not proof that checks passed.
 
 ## Checks and troubleshooting
 
