@@ -9,10 +9,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Input } from '@/components/ui/input';
 import { ListingCard, PrivateListingImage, PropertyImage } from '@/components/app/property-cards';
 import { dateLabel, money, prettyStage } from '@/lib/property-format';
-import { EmptyState, ErrorNote, Field, Metric, NotificationIcon, StatusPill } from '@/components/app/common';
+import { EmptyState, ErrorNote, Field, Metric, StatusPill } from '@/components/app/common';
+import { EnquiriesView } from '@/components/app/enquiries-view';
+import { NotificationsView } from '@/components/app/notifications-view';
 import { AgentDirectoryView, AgentApplicationView, AgentReviewQueue, type AgentApplicationForm } from '@/components/app/agent-workspace';
 import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
@@ -523,29 +524,24 @@ export default function App() {
           onViewDirectory={()=>navTo('agents')}
         />}
 
-        {view==='enquiries'&&<section className="view-content enquiries-view">
-          <div className="enquiry-toolbar"><div><span className="count-pill">{leads.length} total</span><span className="notifications-caption">Every status update is logged and notifies the other participant.</span></div><button className="btn btn-outline btn-sm" onClick={()=>void withBusy(async()=>refreshWorkspace(user!))} disabled={busy}><RefreshCw size={14}/>Refresh</button></div>
-          {leads.length?<div className="enquiry-list">{leads.map(lead=>{
-            const isOwner=lead.ownerId===user?.publicId;
-            const isRequester=lead.requesterId===user?.publicId;
-            const ownerNext:('contacted'|'accepted'|'declined'|'completed')[]=lead.status==='open'?['contacted','accepted','declined']:lead.status==='contacted'?['accepted','declined']:lead.status==='accepted'?['completed']:[];
-            const requesterCanCancel=isRequester&&['open','contacted','accepted'].includes(lead.status);
-            return <article className="panel enquiry-card" key={lead.publicId}>
-              <div className="enquiry-card-head"><span className="enquiry-kind"><CalendarClock size={16}/>{prettyStage(lead.type)}</span><StatusPill value={lead.status}/></div>
-              <h3>{lead.listingTitle}</h3>
-              <div className="enquiry-metadata"><span><MapPin size={13}/>{isOwner?'Your property':'Property enquiry'}</span><span>{dateLabel(lead.createdAt)}</span>{lead.preferredAt&&<span><CalendarClock size={13}/>{new Date(lead.preferredAt).toLocaleString()}</span>}</div>
-              <p className="enquiry-message">{lead.message||'No message provided.'}</p>
-              <div className="enquiry-actions"><button className="btn btn-outline btn-sm" onClick={()=>openLeadConversation(lead)} disabled={busy}><MessageCircle size={14}/>Open conversation</button>{isOwner&&ownerNext.map(next=><button key={next} className={next==='declined'?'btn btn-danger btn-sm':'btn btn-primary btn-sm'} disabled={busy} onClick={()=>updateLeadStatus(lead,next)}>{next==='contacted'?'Mark contacted':next==='accepted'?'Accept request':next==='declined'?'Decline':'Mark completed'}</button>)}{requesterCanCancel&&<button className="btn btn-danger btn-sm" disabled={busy} onClick={()=>updateLeadStatus(lead,'cancelled')}>Cancel request</button>}</div>
-              {isRequester&&lead.status==='declined'&&<p className="enquiry-status-note">The property owner declined this enquiry. The conversation remains available for clarification.</p>}
-              {isOwner&&!ownerNext.length&&<p className="enquiry-status-note">This enquiry is closed for status changes. You can still use the conversation to refer back to the discussion.</p>}
-            </article>;
-          })}</div>:<EmptyState icon={ClipboardList} title="No enquiries yet" body="Viewing requests, questions and offers from published property listings will appear here, with separate controls for owners and requesters." action={()=>navTo('discover')} button="Explore properties"/>}
-        </section>}
+        {view==='enquiries'&&<EnquiriesView
+          leads={leads}
+          userId={user?.publicId}
+          busy={busy}
+          onOpenConversation={openLeadConversation}
+          onUpdateStatus={updateLeadStatus}
+          onRefresh={()=>void withBusy(async()=>refreshWorkspace(user!))}
+          onExplore={()=>navTo('discover')}
+        />}
 
-        {view==='notifications'&&<section className="view-content notifications-view">
-          <Card className="notifications-toolbar"><div><span className="count-pill">{unreadCount} unread</span><span className="notifications-caption">Notifications stay attached to your account, not this device.</span></div><Button variant="outline" size="sm" disabled={busy||unreadCount===0} onClick={markAllNotificationsRead}><Check size={14}/>Mark all read</Button></Card><Separator className="my-3" />
-          {notifications.length?<div className="notification-list">{notifications.map(item=><button className={'notification-card '+(!item.readAt?'unread':'')} key={item.publicId} onClick={()=>markNotificationRead(item)}><span className={'notification-icon '+item.type.replaceAll('_','-')}><NotificationIcon type={item.type}/></span><span className="notification-copy"><span className="notification-top"><b>{item.title}</b><small>{dateLabel(item.createdAt)}</small></span><p>{item.body}</p><small className="notification-destination">{prettyStage(item.destination)} <ArrowUpRight size={12}/></small></span>{!item.readAt&&<i className="unread-dot" aria-label="Unread"/>}</button>)}</div>:<EmptyState icon={Bell} title="You're up to date" body="New viewing requests, messages, listing decisions and commission milestones will appear here." action={()=>navTo('discover')} button="Explore properties"/>}
-        </section>}
+        {view==='notifications'&&<NotificationsView
+          notifications={notifications}
+          unreadCount={unreadCount}
+          busy={busy}
+          onMarkRead={markNotificationRead}
+          onMarkAllRead={markAllNotificationsRead}
+          onExplore={()=>navTo('discover')}
+        />}
 
         {view==='dashboard'&&<section className="view-content">
           <div className="welcome-strip"><div><span className="welcome-label">YOUR WORKSPACE</span><h2>Good day, {user?.name.split(' ')[0]||'there'}.</h2><p>Here is what is happening across your property activity.</p></div><div className="welcome-symbol"><LayoutDashboard size={28}/></div></div>
