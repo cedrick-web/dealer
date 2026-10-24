@@ -9,8 +9,8 @@ import { money } from '@/lib/property-format';
 export function PropertyImage({item,variant='card',onClick}:{item:Listing;variant?:'card'|'modal'|'mini';onClick?:()=>void}) {
   const images=item.images||[];
   const firstImage=images[0];
-  const [src,setSrc]=useState(firstImage&&item.status==='published'?api.listingImageUrl(firstImage.publicId):'');
-  const [hasUploaded,setHasUploaded]=useState(Boolean(firstImage&&item.status==='published'));
+  const [src,setSrc]=useState('');
+  const [hasUploaded,setHasUploaded]=useState(false);
   const [loadError,setLoadError]=useState(false);
   const [activeIndex,setActiveIndex]=useState(0);
   useEffect(()=>{setActiveIndex(0)},[item.publicId]);
@@ -25,11 +25,6 @@ export function PropertyImage({item,variant='card',onClick}:{item:Listing;varian
       setHasUploaded(false);
       return ()=>{active=false};
     }
-    if(item.status==='published'){
-      setSrc(api.listingImageUrl(uploaded.publicId));
-      setHasUploaded(true);
-      return ()=>{active=false};
-    }
     setSrc('');
     setHasUploaded(false);
     api.loadListingImage(uploaded.publicId).then(url=>{
@@ -40,6 +35,7 @@ export function PropertyImage({item,variant='card',onClick}:{item:Listing;varian
     return ()=>{active=false;if(objectUrl)URL.revokeObjectURL(objectUrl)};
   },[item.publicId,item.status,uploaded?.publicId]);
   const movePhoto=(delta:number)=>setActiveIndex(index=>images.length?(index+delta+images.length)%images.length:0);
+  const photoAriaLabel=uploaded?.alt||( !uploaded ? 'No seller photo uploaded for '+item.title : loadError ? 'Seller photo unavailable for '+item.title : 'Loading seller photo for '+item.title);
   const content=<>
     {variant==='card'&&<span className="listing-badge">{item.purpose==='sale'?'FOR SALE':'FOR RENT'}</span>}
     <span className={'photo-proof-tag '+(hasUploaded?'photo-proof-real':uploaded?'photo-proof-loading':'photo-proof-missing')}>{hasUploaded?(variant==='mini'?'Seller photo':uploaded?.alt||'Seller-uploaded property photo'):uploaded?(loadError?'Photo unavailable':'Loading seller photo'):'No seller photo'}</span>
@@ -49,8 +45,8 @@ export function PropertyImage({item,variant='card',onClick}:{item:Listing;varian
     {loadError&&<span className="photo-load-warning">Uploaded photo unavailable</span>}
   </>;
   if(variant==='card')return <button type="button" className="listing-photo" style={{backgroundImage:src?'url('+src+')':'linear-gradient(135deg,#e8efe7,#d9e5d7)'}} onClick={onClick} aria-label={'Open '+item.title}>{content}</button>;
-  if(variant==='mini')return <div className="compact-property-photo" role="img" aria-label={uploaded?.alt||('Property image for '+item.title)} style={{backgroundImage:src?'url('+src+')':'linear-gradient(135deg,#e8efe7,#d9e5d7)'}}>{content}</div>;
-  return <div className="modal-photo" role="group" aria-label={uploaded?.alt||('Property image for '+item.title)} style={{backgroundImage:src?'url('+src+')':'linear-gradient(135deg,#e8efe7,#d9e5d7)'}}>
+  if(variant==='mini')return <div className="compact-property-photo" role="img" aria-label={photoAriaLabel} style={{backgroundImage:src?'url('+src+')':'linear-gradient(135deg,#e8efe7,#d9e5d7)'}}>{content}</div>;
+  return <div className="modal-photo" role="group" aria-label={photoAriaLabel} style={{backgroundImage:src?'url('+src+')':'linear-gradient(135deg,#e8efe7,#d9e5d7)'}}>
     {content}
     {images.length>1&&<div className="modal-gallery-controls"><button type="button" onClick={()=>movePhoto(-1)} aria-label="Previous property photo"><ArrowLeft size={17}/></button><span>{currentIndex+1} of {images.length}</span><button type="button" onClick={()=>movePhoto(1)} aria-label="Next property photo"><ArrowRight size={17}/></button></div>}
   </div>;
