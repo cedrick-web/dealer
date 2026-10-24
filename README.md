@@ -117,6 +117,11 @@ Keep reusable controls in \`src/components/ui/\`, business-focused UI in \`src/c
     │   │   │   ├── app/
     │   │   │   │   ├── agent-workspace.tsx       # Agent directory, application and moderation views
     │   │   │   │   ├── dashboard-view.tsx        # Typed account dashboard and activity table
+    │   │   │   │   ├── deal-workspace.tsx         # Commission acceptance and two-party completion
+    │   │   │   │   ├── enquiries-view.tsx         # Owner/requester enquiry workflow
+    │   │   │   │   ├── listing-review-queue.tsx   # Administrator property moderation
+    │   │   │   │   ├── messaging-view.tsx         # Authenticated property threads
+    │   │   │   │   ├── notifications-view.tsx     # Account notification center
     │   │   │   │   ├── deal-workspace.tsx        # Commission acceptance and two-party completion
     │   │   │   │   ├── enquiries-view.tsx        # Owner/requester enquiry workflow
     │   │   │   │   ├── notifications-view.tsx    # Account notification center
@@ -617,12 +622,12 @@ Before a public launch, add HTTPS end-to-end, credential rate limits and lockout
 ## Roadmap before a public launch
 
 - [x] Add Dart unit tests for validation, signed tokens, expiry, tampered signatures, file signatures, request-size enforcement and failed-login protection.
-- [x] Add frontend tests for API-empty states, search filter requests, responsive navigation, reusable UI primitives, agent approval screens, notification callbacks, owner enquiry status actions, deal completion states, dashboard data summaries and no-stock-photo handling.
+- [x] Add frontend tests for API-empty states, search filter requests, responsive navigation, reusable UI primitives, agent approval screens, notification callbacks, owner enquiry status actions, deal completion states, dashboard summaries, private messaging and admin-only listing review, plus no-stock-photo handling.
 - [x] Add a Docker-backed API smoke test using a disposable MongoDB database for registration, moderation, public search and notification reads.
 - [ ] Expand runtime integration coverage to image/private-document upload, agent application/review, owner-side messaging, commission acceptance/completion and moderation edge cases.
 - [ ] Add browser end-to-end tests, keyboard-navigation testing and screenshot/responsive regression tests.
-- [x] Extract dashboard, agent, enquiry, notification and commission pages into typed presentational components with callback-based API/state wiring.
-- [ ] Continue moving private messaging and property-admin moderation queue views out of `App.tsx`, adding focused integration tests as each page is extracted.
+- [x] Extract dashboard, agent, enquiry, notification, commission, messaging and property-moderation pages into typed presentational components with callback-based API/state wiring.
+- [ ] Continue extracting the listing editor, saved-property view, trust/evidence workspace and remaining account-admin layout from `App.tsx` as dedicated typed views with focused tests.
 - [ ] Move failed-login throttling from an in-process map to a shared rate limiter, add per-IP/API-wide request limits, account/email verification, password reset and audited session/device management.
 - [ ] Extend agent onboarding with evidence-backed identity checks, professional references and auditable reviewer checklists before making any regulated qualification claims.
 - [ ] Add signed contracts, consent versioning, downloadable receipts and dispute resolution designed with a legal professional.
