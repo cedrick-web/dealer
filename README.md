@@ -249,7 +249,7 @@ In a third PowerShell terminal, run the Electron shell:
     $env:DEALER_DEV_URL = "http://localhost:5173"
     npm start
 
-The desktop shell uses the same API account and listings as the browser. If the API is not running, its connection status shows offline and server-backed actions will fail with a clear message.
+The desktop shell uses the same API account and listings as the browser. For the default local stack, configure WEB_ORIGIN as http://localhost:5173,dealer://app. The packaged shell serves its UI at the secure dealer://app origin so authenticated API requests can pass the API's origin allowlist without using an unrestricted file:// origin. If the API is not running, its connection status shows offline and server-backed actions will fail with a clear message.
 
 ### Build a Windows installer
 
@@ -279,7 +279,7 @@ Build macOS DMG artifacts on a macOS build machine with npm run build:mac; build
 | MONGO_DATABASE | No | Logical database name; default is dealer |
 | JWT_SECRET | Yes | Long random HMAC signing secret; keep it private |
 | API_PORT | No | API listen port; default is 8080 |
-| WEB_ORIGIN | Yes for deployment | Exact allowed browser origin, including scheme and port |
+| WEB_ORIGIN | Yes for deployment | Comma-separated exact allowed origins; local defaults include http://localhost:5173 and dealer://app for the packaged desktop client |
 | VITE_API_URL | Yes for deployment | Public API base URL baked into the web build |
 | BOOTSTRAP_ADMIN_EMAIL | Optional | Email for creating the first administrator |
 | BOOTSTRAP_ADMIN_PASSWORD | Optional | First administrator password, minimum 14 characters |
