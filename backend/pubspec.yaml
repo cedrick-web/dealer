@@ -17,3 +17,6 @@ dev_dependencies:
 
 dev_dependencies:
   test: ^1.25.8
+
+dev_dependencies:
+  test: ^1.25.8
