@@ -63,10 +63,11 @@ Response unauthenticated() => reply(401, {'error': 'Sign in is required for this
 String now() => DateTime.now().toUtc().toIso8601String();
 String? validPurpose(dynamic v) => ['sale', 'rent'].contains(v) ? v as String : null;
 String? validType(dynamic v) => ['house', 'apartment', 'land', 'commercial', 'room'].contains(v) ? v as String : null;
-Map<String, dynamic> publicDoc(Map<String, dynamic> source) {
+Map<String, dynamic> publicDoc(Map<String, dynamic> source, {bool includeReview = false}) {
   final out = Map<String, dynamic>.from(source);
   out.remove('_id'); out.remove('passwordHash'); out.remove('evidenceHash');
   out.remove('ownerPrivate'); out.remove('filePath');
+  if (!includeReview) { out.remove('reviewNote'); out.remove('reviewedBy'); }
   return out;
 }
 
@@ -209,7 +210,7 @@ Future<void> main() async {
   r.get('/api/v1/me/listings', (Request q) async {
     final c = userFrom(q); if (c == null) return unauthenticated();
     final docs = await listings.find(where.eq('ownerId', c['sub']), sort: {'createdAt': -1}).toList();
-    return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList()});
+    return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d), includeReview: true)).toList()});
   });
   r.patch('/api/v1/admin/listings/<id>/review', (Request q, String id) async {
     final c = userFrom(q); if (c == null) return unauthenticated();
