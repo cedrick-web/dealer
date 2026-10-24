@@ -6,7 +6,7 @@ import {
   LogOut, MapPin, Menu, MessageCircle, MoreHorizontal, Plus, RefreshCw, Search, Send, Settings,
   ShieldCheck, SlidersHorizontal, Sparkles, Upload, UserCircle, Users, WalletCards, X
 } from 'lucide-react';
-import { api, type Agent, type AgentApplication, type AppNotification, type Conversation, type Deal, type EvidenceDocument, type Lead, type Listing, type Message, type User, setSessionToken } from './api';
+import { api, type Agent, type AgentApplication, type AppNotification, type Conversation, type Deal, type EvidenceDocument, type Lead, type Listing, type ListingImage, type Message, type User, setSessionToken } from './api';
 
 type View = 'discover'|'agents'|'agent-application'|'agent-review'|'notifications'|'dashboard'|'enquiries'|'new-listing'|'my-listings'|'saved'|'messages'|'deals'|'trust'|'account'|'admin';
 type AuthMode = 'login'|'register';
@@ -30,12 +30,47 @@ function ErrorNote({text,onClose}:{text:string;onClose:()=>void}) {
 function EmptyState({icon:Icon=Search,title,body,action,button}:{icon?:any;title:string;body:string;action?:()=>void;button?:string}) {
   return <div className="empty-state"><span className="empty-icon"><Icon size={24}/></span><h3>{title}</h3><p>{body}</p>{action&&button&&<button className="btn btn-primary" onClick={action}>{button}<ArrowRight size={16}/></button>}</div>;
 }
+function PropertyImage({item,variant='card',onClick}:{item:Listing;variant?:'card'|'modal';onClick?:()=>void}) {
+  const uploaded=item.images?.[0];
+  const [src,setSrc]=useState(uploaded&&item.status==='published'?api.listingImageUrl(uploaded.publicId):photoFor(item));
+  const [hasUploaded,setHasUploaded]=useState(Boolean(uploaded&&item.status==='published'));
+  const [loadError,setLoadError]=useState(false);
+  useEffect(()=>{
+    let active=true;
+    let objectUrl:string|undefined;
+    setLoadError(false);
+    if(!uploaded){
+      setSrc(photoFor(item));
+      setHasUploaded(false);
+      return ()=>{active=false};
+    }
+    if(item.status==='published'){
+      setSrc(api.listingImageUrl(uploaded.publicId));
+      setHasUploaded(true);
+      return ()=>{active=false};
+    }
+    setSrc(photoFor(item));
+    setHasUploaded(false);
+    api.loadListingImage(uploaded.publicId).then(url=>{
+      objectUrl=url;
+      if(active){setSrc(url);setHasUploaded(true)}
+      else URL.revokeObjectURL(url);
+    }).catch(()=>{if(active){setLoadError(true);setHasUploaded(false)}});
+    return ()=>{active=false;if(objectUrl)URL.revokeObjectURL(objectUrl)};
+  },[item.publicId,item.status,uploaded?.publicId]);
+  const content=<>
+    {variant==='card'&&<span className="listing-badge">{item.purpose==='sale'?'FOR SALE':'FOR RENT'}</span>}
+    <span className={'photo-proof-tag '+(hasUploaded?'photo-proof-real':'photo-proof-illustration')}>{hasUploaded?(uploaded?.alt||'Seller-uploaded property photo'):'Illustrative image · not the actual property'}</span>
+    {variant==='card'&&<span className="photo-location"><MapPin size={13}/>{item.location.sector ? item.location.sector+', ':''}{item.location.district}</span>}
+    {loadError&&<span className="photo-load-warning">Uploaded photo unavailable</span>}
+  </>;
+  if(variant==='card')return <button type="button" className="listing-photo" style={{backgroundImage:'url('+src+')'}} onClick={onClick} aria-label={'Open '+item.title}>{content}</button>;
+  return <div className="modal-photo" role="img" aria-label={uploaded?.alt||('Property image for '+item.title)} style={{backgroundImage:'url('+src+')'}}>{content}</div>;
+}
+
 function ListingCard({item,saved,onSave,onOpen,showSave=true}:{item:Listing;saved:boolean;onSave:()=>void;onOpen:()=>void;showSave?:boolean}) {
   return <article className="listing-card">
-    <button className="listing-photo" style={{backgroundImage:'url('+photoFor(item)+')'}} onClick={onOpen} aria-label={'Open '+item.title}>
-      <span className="listing-badge">{item.purpose==='sale'?'FOR SALE':'FOR RENT'}</span>
-      <span className="photo-location"><MapPin size={13}/>{item.location.sector ? item.location.sector+', ':''}{item.location.district}</span>
-    </button>
+    <PropertyImage item={item} onClick={onOpen}/>
     {showSave&&<button className={'favorite-float '+(saved?'is-saved':'')} onClick={onSave} aria-label={saved?'Remove saved property':'Save property'}><Heart size={18} fill={saved?'currentColor':'none'}/></button>}
     <div className="listing-content">
       <div className="listing-type">{item.propertyType} <span>·</span> Rwanda</div>
@@ -87,6 +122,9 @@ export default function App() {
   const [passwordForm,setPasswordForm] = useState({currentPassword:'',newPassword:'',confirmPassword:''});
   const [listingForm,setListingForm] = useState({title:'',description:'',propertyType:'house',purpose:'sale',district:'Gasabo',sector:'',price:''});
   const [editingListingId,setEditingListingId] = useState<string|null>(null);
+  const [existingImages,setExistingImages] = useState<ListingImage[]>([]);
+  const [newListingPhotos,setNewListingPhotos] = useState<{clientId:string;file:File;altText:string}[]>([]);
+  const [photoPreviews,setPhotoPreviews] = useState<{clientId:string;url:string}[]>([]);
   const [viewingForm,setViewingForm] = useState({message:'I would like to arrange a viewing and discuss this property.',preferredAt:''});
   const [messageDraft,setMessageDraft] = useState('');
   const [dealForm,setDealForm] = useState({commissionPercent:'3',commissionTerms:'Commission is payable only after both parties sign the written agreement and the transaction legally closes.'});
@@ -160,6 +198,11 @@ export default function App() {
   },[refreshWorkspace]);
   useEffect(()=>{const timer=window.setTimeout(()=>{refreshListings().catch(()=>{})},250);return()=>window.clearTimeout(timer)},[refreshListings]);
   useEffect(()=>{if(view==='messages'&&selectedConversation)refreshMessages(selectedConversation)},[view,selectedConversation,refreshMessages]);
+  useEffect(()=>{
+    const previews=newListingPhotos.map(photo=>({clientId:photo.clientId,url:URL.createObjectURL(photo.file)}));
+    setPhotoPreviews(previews);
+    return ()=>previews.forEach(photo=>URL.revokeObjectURL(photo.url));
+  },[newListingPhotos]);
   useEffect(()=>{if(!user)return;const timer=window.setInterval(()=>{void refreshNotifications()},45000);return()=>window.clearInterval(timer)},[user?.publicId,refreshNotifications]);
 
   const filtered = useMemo(()=>{
@@ -258,11 +301,36 @@ export default function App() {
   const beginEditListing = (item:Listing) => {
     if(!requireUser('new-listing'))return;
     setEditingListingId(item.publicId);
+    setExistingImages(item.images||[]);
+    setNewListingPhotos([]);
     setListingForm({
       title:item.title, description:item.description, propertyType:item.propertyType, purpose:item.purpose,
       district:item.location.district, sector:item.location.sector||'', price:String(item.price.amount),
     });
     setView('new-listing');
+  };
+  const selectListingPhotos = (files:FileList|null) => {
+    if(!files?.length)return;
+    const selected=Array.from(files);
+    if((existingImages.length+newListingPhotos.length+selected.length)>6){flash('A listing can have up to six photos. Remove a photo before adding more.');return;}
+    const invalid=selected.find(file=>!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size===0||file.size>8*1024*1024);
+    if(invalid){flash('Choose JPEG, PNG or WebP photos, each smaller than 8 MiB.');return;}
+    setNewListingPhotos(previous=>[
+      ...previous,
+      ...selected.map((file,index)=>({clientId:Date.now().toString()+'-'+index+'-'+Math.random().toString(36).slice(2),file,altText:listingForm.title.trim()||file.name.replace(/\.[^.]+$/,'')||'Property photo'})),
+    ]);
+  };
+  const removeNewPhoto = (clientId:string) => setNewListingPhotos(previous=>previous.filter(photo=>photo.clientId!==clientId));
+  const removeExistingPhoto = (photo:ListingImage) => {
+    if(!editingListingId)return;
+    if(!window.confirm('Remove this uploaded photo? The listing will return to review.'))return;
+    void withBusy(async()=>{
+      await api.deleteListingImage(editingListingId,photo.publicId);
+      setExistingImages(previous=>previous.filter(image=>image.publicId!==photo.publicId));
+      setMyItems(previous=>previous.map(item=>item.publicId===editingListingId?{...item,status:'pending_review',images:(item.images||[]).filter(image=>image.publicId!==photo.publicId)}:item));
+      if(modal?.publicId===editingListingId)setModal(previous=>previous?{...previous,status:'pending_review',images:(previous.images||[]).filter(image=>image.publicId!==photo.publicId)}:previous);
+      flash('Photo removed. The listing is pending review again.');
+    });
   };
   const submitListing = (event:FormEvent) => {
     event.preventDefault();if(!requireUser())return;
@@ -274,10 +342,18 @@ export default function App() {
       };
       const wasEditing=Boolean(editingListingId);
       const result=wasEditing?await api.updateListing(editingListingId!,payload):await api.createListing(payload);
+      const listingId=result.id;
+      let photoFailures=0;
+      let photoSuccesses=0;
+      for(const photo of newListingPhotos){
+        try{await api.uploadListingImage(listingId,photo.file,photo.altText);photoSuccesses++}
+        catch(error){photoFailures++;flash('Listing saved but one photo failed to upload: '+(error as Error).message)}
+      }
       setListingForm({title:'',description:'',propertyType:'house',purpose:'sale',district:'Gasabo',sector:'',price:''});
-      setEditingListingId(null);
+      setEditingListingId(null);setExistingImages([]);setNewListingPhotos([]);setExistingImages([]);setNewListingPhotos([]);
       await Promise.all([refreshWorkspace(user!),refreshListings()]);setView('my-listings');
-      flash(wasEditing?'Changes saved and returned to review. Reference: '+result.id+'. Public visibility is paused until approval.':'Submitted for review. Reference: '+result.id+'. It will not be public until an administrator approves it.');
+      const base=wasEditing?'Changes saved and returned to review. Reference: '+listingId+'. Public visibility is paused until approval.':'Submitted for review. Reference: '+listingId+'. It will not be public until an administrator approves it.';
+      flash(photoFailures?base+' Uploaded '+photoSuccesses+' new photo(s); '+photoFailures+' failed. Reopen the listing to retry.':base+(photoSuccesses?' '+photoSuccesses+' seller photo(s) uploaded.':''));
     });
   };
   const withdrawListing = (item:Listing) => {
