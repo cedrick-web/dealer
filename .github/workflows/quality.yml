@@ -141,6 +141,11 @@ jobs:
           curl --fail --silent --show-error "http://127.0.0.1:8080/api/v1/listings?q=CI%20smoke&district=Gasabo&purpose=sale&maxPrice=200000000&limit=10" | jq -e '.total >= 1'
           curl --fail --silent --show-error "http://127.0.0.1:8080/api/v1/me/notifications?limit=100" \
             -H "Authorization: Bearer $admin_token" | jq -e '.unreadCount >= 1'
+      - name: Diagnose API integration failure
+        if: failure()
+        run: |
+          docker compose ps --all || true
+          docker compose logs --no-color --tail=250 api mongo frontend || true
       - name: Stop stack and remove CI volumes
         if: always()
         run: docker compose down -v
