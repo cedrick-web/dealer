@@ -809,7 +809,7 @@ Future<void> main() async {
     final validMagic = mime == 'image/jpeg'
       ? prefix.length >= 3 && prefix[0] == 255 && prefix[1] == 216 && prefix[2] == 255
       : mime == 'image/png'
-        ? prefix.length >= 8 && prefix[0] == 137 && prefix[1] == 80 && prefix[2] == 78 && prefix[3] == 71
+        ? prefix.length >= 8 && prefix[0] == 137 && prefix[1] == 80 && prefix[2] == 78 && prefix[3] == 71 && prefix[4] == 13 && prefix[5] == 10 && prefix[6] == 26 && prefix[7] == 10
         : prefix.length >= 12 && prefix[0] == 82 && prefix[1] == 73 && prefix[2] == 70 && prefix[3] == 70 && prefix[8] == 87 && prefix[9] == 69 && prefix[10] == 66 && prefix[11] == 80;
     if (!validMagic) return reply(422, {'error': 'Image signature does not match the selected file type.'});
     final id = uid.v4(), ext = allowed[mime]!, at = now();
@@ -916,7 +916,7 @@ Future<void> main() async {
     final prefix = bytes.take(16).toList();
     final validMagic = mime == 'application/pdf' ? utf8.decode(prefix.take(4).toList(), allowMalformed: true) == '%PDF'
       : mime == 'image/jpeg' ? prefix.length >= 3 && prefix[0] == 255 && prefix[1] == 216 && prefix[2] == 255
-      : mime == 'image/png' ? prefix.length >= 8 && prefix[0] == 137 && prefix[1] == 80 && prefix[2] == 78 && prefix[3] == 71
+      : mime == 'image/png' ? prefix.length >= 8 && prefix[0] == 137 && prefix[1] == 80 && prefix[2] == 78 && prefix[3] == 71 && prefix[4] == 13 && prefix[5] == 10 && prefix[6] == 26 && prefix[7] == 10
       : prefix.length >= 12 && prefix[0] == 82 && prefix[1] == 73 && prefix[2] == 70 && prefix[3] == 70 && prefix[8] == 87 && prefix[9] == 69 && prefix[10] == 66 && prefix[11] == 80;
     if (!validMagic) return reply(422, {'error': 'File signature does not match the selected file type.'});
     final id = uid.v4(), ext = allowed[mime]!;
