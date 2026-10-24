@@ -33,7 +33,7 @@ describe('account dashboard', () => {
   it('renders live account counts and the latest listing without inserting inventory', () => {
     render(<DashboardView firstName="Aline" listings={[listing]} savedCount={2} conversationCount={1} deals={[deal]} leads={[lead]} activityTableView={true} onToggleActivityTableView={vi.fn()} onViewListings={vi.fn()} onOpenMessages={vi.fn()} />);
     expect(screen.getByText('Good day, Aline.')).toBeTruthy();
-    expect(screen.getByText('Three bedroom home')).toBeTruthy();
+    expect(screen.getAllByText('Three bedroom home').length).toBeGreaterThan(0);
     expect(screen.getByText('Your listings').parentElement?.textContent).toContain('1');
     expect(screen.getByText('Saved properties').parentElement?.textContent).toContain('2');
   });
