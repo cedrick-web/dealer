@@ -140,6 +140,7 @@ export default function App() {
   const [districts,setDistricts] = useState<string[]>([]);
   const [search,setSearch] = useState('');
   const [district,setDistrict] = useState('All Rwanda');
+  const [maxPrice,setMaxPrice] = useState('');
   const [purpose,setPurpose] = useState<'sale'|'rent'>('sale');
   const [propertyType,setPropertyType] = useState('All properties');
   const [sort,setSort] = useState('newest');
@@ -168,6 +169,7 @@ export default function App() {
     const params:Record<string,string> = {limit:'60',purpose};
     if(district!=='All Rwanda')params.district=district;
     if(propertyType!=='All properties')params.type=propertyType;
+    if(maxPrice.trim()&&Number(maxPrice)>0)params.maxPrice=String(Math.floor(Number(maxPrice)));
     if(search.trim())params.q=search.trim();
     try {
       const result = await api.listings(params);
@@ -176,7 +178,7 @@ export default function App() {
       if(sequence===listingRequestSequence.current)setApiOnline(false);
       throw e;
     }
-  },[purpose,district,propertyType,search]);
+  },[purpose,district,propertyType,maxPrice,search]);
   const refreshWorkspace = useCallback(async (activeUser:User) => {
     setProfileForm({name:activeUser.name||'',phone:activeUser.phone||''});
     const safe = async <T,>(fn:()=>Promise<T>, fallback:T) => { try { return await fn(); } catch { return fallback; } };
@@ -227,6 +229,14 @@ export default function App() {
   useEffect(()=>{const timer=window.setTimeout(()=>{refreshListings().catch(()=>{})},250);return()=>window.clearTimeout(timer)},[refreshListings]);
   useEffect(()=>{if(view==='messages'&&selectedConversation)refreshMessages(selectedConversation)},[view,selectedConversation,refreshMessages]);
   useEffect(()=>{
+    if(view!=='messages'||!user)return;
+    const timer=window.setInterval(()=>{
+      void api.conversations().then(result=>setConversations(result.data||[])).catch(()=>{});
+      if(selectedConversation)void refreshMessages(selectedConversation);
+    },12000);
+    return ()=>window.clearInterval(timer);
+  },[view,user?.publicId,selectedConversation,refreshMessages]);
+  useEffect(()=>{
     const previews=newListingPhotos.map(photo=>({clientId:photo.clientId,url:URL.createObjectURL(photo.file)}));
     setPhotoPreviews(previews);
     return ()=>previews.forEach(photo=>URL.revokeObjectURL(photo.url));
@@ -238,13 +248,14 @@ export default function App() {
     if(view==='discover') data = data.filter(x=>x.purpose===purpose);
     if(propertyType!=='All properties'&&view==='discover') data=data.filter(x=>x.propertyType===propertyType);
     if(district!=='All Rwanda'&&view==='discover') data=data.filter(x=>x.location.district===district);
+    if(maxPrice.trim()&&Number(maxPrice)>0&&view==='discover')data=data.filter(x=>x.price.amount<=Number(maxPrice));
     const q=search.trim().toLowerCase();
     if(q) data=data.filter(x=>[x.title,x.description,x.location.district,x.location.sector,x.propertyType].join(' ').toLowerCase().includes(q));
     if(sort==='price-low') data=[...data].sort((a,b)=>a.price.amount-b.price.amount);
     else if(sort==='price-high') data=[...data].sort((a,b)=>b.price.amount-a.price.amount);
     else if(sort==='oldest') data=[...data].sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
     return data;
-  },[view,savedItems,myItems,items,purpose,propertyType,district,search,sort]);
+  },[view,savedItems,myItems,items,purpose,propertyType,district,maxPrice,search,sort]);
 
   const requireUser = (target?:View) => {
     if(!user) { setAuthMode('login');setAuthOpen(true); setReturnView(target || view); if(target) setView(target); return false; }
@@ -384,7 +395,7 @@ export default function App() {
         catch(error){photoFailures++;flash('Listing saved but one photo failed to upload: '+(error as Error).message)}
       }
       setListingForm({title:'',description:'',propertyType:'house',purpose:'sale',district:'Gasabo',sector:'',price:''});
-      setEditingListingId(null);setExistingImages([]);setNewListingPhotos([]);setExistingImages([]);setNewListingPhotos([]);
+      setEditingListingId(null);setExistingImages([]);setNewListingPhotos([]);
       await Promise.all([refreshWorkspace(user!),refreshListings()]);setView('my-listings');
       const base=wasEditing?'Changes saved and returned to review. Reference: '+listingId+'. Public visibility is paused until approval.':'Submitted for review. Reference: '+listingId+'. It will not be public until an administrator approves it.';
       flash(photoFailures?base+' Uploaded '+photoSuccesses+' new photo(s); '+photoFailures+' failed. Reopen the listing to retry.':base+(photoSuccesses?' '+photoSuccesses+' seller photo(s) uploaded.':''));
@@ -468,7 +479,7 @@ export default function App() {
     });
   };
   const doTrustCheck = (event:FormEvent) => {event.preventDefault();void withBusy(async()=>setHashResult(await api.verifyHash(hashInput.trim())))};
-  const handleUpload = (listing:Listing,file?:File|null) => {if(!file)return;void withBusy(async()=>{const result=await api.uploadDocument(listing.publicId,file);setDocs(prev=>[result.data,...prev]);flash('Evidence stored privately. SHA-256: '+result.sha256)})};
+  const handleUpload = (listing:Listing,file?:File|null) => {if(!file)return;void withBusy(async()=>{const result=await api.uploadDocument(listing.publicId,file);setDocs(prev=>[result.data,...prev]);setModal(prev=>prev?.publicId===listing.publicId?{...prev,status:'pending_review',verification:{status:'unverified',checks:[]},reviewNote:''}:prev);await Promise.all([refreshWorkspace(user!),refreshListings()]);flash('Evidence stored privately. The listing has returned to human review. SHA-256: '+result.sha256)})};
   const loadDocs = (listing:Listing) => {if(!requireUser())return;void withBusy(async()=>setDocs((await api.documents(listing.publicId)).data||[]))};
 
   const navigation:{id:View;label:string;icon:any;group:string}[]=[
@@ -526,7 +537,7 @@ export default function App() {
         {view==='discover'&&<section className="view-content">
           <div className="hero-panel"><div className="hero-glow"/><div className="hero-text"><div className="hero-kicker"><Sparkles size={15}/> MORE CLARITY. FEWER SURPRISES.</div><h2>Find a place.<br/><em>Know what comes next.</em></h2><p>Houses, apartments and land, with a trail for questions, viewing requests and deal milestones.</p><div className="hero-stats"><span><b>{items.length}</b><small>Public listings</small></span><span><b>{districts.length||30}</b><small>District options</small></span><span><b>RWF</b><small>Local currency</small></span></div></div><div className="hero-illustration"><div className="illustration-house"><House size={82} strokeWidth={1}/><span/><span/><span/></div><div className="float-chip chip-proof"><ShieldCheck size={16}/>Evidence trail</div><div className="float-chip chip-deal"><CheckCircle2 size={16}/>Deal milestones</div></div></div>
           <div className="quick-actions"><button onClick={()=>navTo('new-listing')}><span className="quick-icon"><FilePlus2 size={19}/></span><span><b>Create a listing</b><small>Submit a house, room or land</small></span><ChevronRight size={17}/></button><button onClick={()=>navTo('saved')}><span className="quick-icon quick-lilac"><Heart size={19}/></span><span><b>Compare your shortlist</b><small>Keep properties in one place</small></span><ChevronRight size={17}/></button><button onClick={()=>navTo('deals')}><span className="quick-icon quick-gold"><WalletCards size={19}/></span><span><b>Track a deal</b><small>Fees, steps and decisions</small></span><ChevronRight size={17}/></button></div>
-          <div className="toolbar"><div className="purpose-switch"><button className={purpose==='sale'?'selected':''} onClick={()=>setPurpose('sale')}>Buy</button><button className={purpose==='rent'?'selected':''} onClick={()=>setPurpose('rent')}>Rent</button></div><label className="filter-control"><MapPin size={15}/><select value={district} onChange={e=>setDistrict(e.target.value)}><option>All Rwanda</option>{districts.map(x=><option key={x}>{x}</option>)}</select><ChevronDown size={14}/></label><label className="filter-control"><Building2 size={15}/><select value={propertyType} onChange={e=>setPropertyType(e.target.value)}><option>All properties</option><option value="house">House</option><option value="apartment">Apartment</option><option value="land">Land</option><option value="commercial">Commercial</option><option value="room">Room</option></select><ChevronDown size={14}/></label><label className="filter-control"><SlidersHorizontal size={15}/><select value={sort} onChange={e=>setSort(e.target.value)}><option value="newest">Newest first</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="oldest">Oldest first</option></select></label><button className="btn btn-outline btn-sm" onClick={()=>{setDistrict('All Rwanda');setPropertyType('All properties');setSearch('');setSort('newest')}}><Filter size={14}/>Clear</button></div>
+          <div className="toolbar"><div className="purpose-switch"><button className={purpose==='sale'?'selected':''} onClick={()=>setPurpose('sale')}>Buy</button><button className={purpose==='rent'?'selected':''} onClick={()=>setPurpose('rent')}>Rent</button></div><label className="filter-control"><MapPin size={15}/><select value={district} onChange={e=>setDistrict(e.target.value)}><option>All Rwanda</option>{districts.map(x=><option key={x}>{x}</option>)}</select><ChevronDown size={14}/></label><label className="filter-control"><Building2 size={15}/><select value={propertyType} onChange={e=>setPropertyType(e.target.value)}><option>All properties</option><option value="house">House</option><option value="apartment">Apartment</option><option value="land">Land</option><option value="commercial">Commercial</option><option value="room">Room</option></select><ChevronDown size={14}/></label><label className="price-filter"><span>Max price (RWF)</span><input type="number" inputMode="numeric" min="1" step="1" placeholder="Any budget" value={maxPrice} onChange={e=>setMaxPrice(e.target.value)} aria-label="Maximum price in Rwandan francs"/></label><label className="filter-control"><SlidersHorizontal size={15}/><select value={sort} onChange={e=>setSort(e.target.value)}><option value="newest">Newest first</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="oldest">Oldest first</option></select></label><button className="btn btn-outline btn-sm" onClick={()=>{setDistrict('All Rwanda');setPropertyType('All properties');setMaxPrice('');setSearch('');setSort('newest')}}><Filter size={14}/>Clear</button></div>
           <div className="section-title-row"><div><h2>Explore properties</h2><p>Only published listings from the API appear here.</p></div><span className="count-pill">{filtered.length} results</span></div>
           {filtered.length?<div className="listing-grid">{filtered.map(item=><ListingCard key={item.publicId} item={item} saved={savedIds.includes(item.publicId)} onSave={()=>saveListing(item)} onOpen={()=>{setModal(item);setViewingForm({message:'I would like to arrange a viewing and discuss this property.',preferredAt:''});setDocs([])}}/>)}</div>:<EmptyState title={apiOnline?'No published properties match yet':'API is not reachable'} body={apiOnline?'There are no published listings for these filters. Create a listing or clear the filters to keep exploring.':'Start Docker Compose, then refresh. Illustrative fake listings are intentionally not presented as genuine homes for sale.'} icon={apiOnline?House:CircleAlert} action={()=>apiOnline?navTo('new-listing'):void withBusy(async()=>refreshListings())} button={apiOnline?'Create a listing':'Retry connection'}/>}
         </section>}
