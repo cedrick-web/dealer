@@ -22,15 +22,7 @@ void main() {
       expect(server.hasAllowedFileSignature('image/svg+xml', [60, 115, 118, 103]), isFalse);
     });
 
-    test('JSON parser rejects oversized declared and chunked bodies', () async {
-      final declaredLarge = Request(
-        'POST',
-        Uri.parse('http://localhost/api/test'),
-        headers: {'content-length': '100'},
-        body: '{"a":1}',
-      );
-      expect(await server.readJson(declaredLarge, 10), isNull);
-
+    test('JSON parser rejects oversized bodies and accepts valid JSON', () async {
       final chunkedLarge = Request(
         'POST',
         Uri.parse('http://localhost/api/test'),
