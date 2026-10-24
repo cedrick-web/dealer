@@ -25,10 +25,12 @@ services:
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
       DOCUMENT_STORAGE: /data/private-documents
+      LISTING_IMAGE_STORAGE: /data/listing-images
     ports:
       - "8080:8080"
     volumes:
       - private_documents:/data/private-documents
+      - listing_images:/data/listing-images
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
       interval: 30s
@@ -53,3 +55,4 @@ networks:
 volumes:
   mongo_data: {}
   private_documents: {}
+  listing_images: {}
