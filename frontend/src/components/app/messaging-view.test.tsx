@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { FormEvent } from 'react';
 import type { Conversation, Message } from '@/api';
 import { MessagingView } from './messaging-view';
 
@@ -34,7 +35,7 @@ describe('private messaging view', () => {
   });
 
   it('sends the controlled composer form to the parent and disables empty messages', () => {
-    const send=vi.fn((event:React.FormEvent<HTMLFormElement>)=>event.preventDefault());
+    const send=vi.fn((event:FormEvent<HTMLFormElement>)=>event.preventDefault());
     const setDraft=vi.fn();
     render(<MessagingView conversations={[conversation]} selectedConversationId="conversation-1" messages={[]} userId="buyer-1" busy={false} draft="Hello owner" setDraft={setDraft} onSelectConversation={vi.fn()} onRefreshConversations={vi.fn()} onReloadMessages={vi.fn()} onSendMessage={send} />);
     const input=screen.getByRole('textbox',{name:'Write a message'});
