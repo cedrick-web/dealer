@@ -36,8 +36,11 @@ The repository is named **dealer** and the interface is currently branded **Deal
 ### User workspace
 - Register and sign in using email and password.
 - Passwords are hashed using BCrypt; the API returns a signed, expiring bearer token.
-- Submit property listings for human review, and see the owner's submissions and their status.
-- Request a property viewing or send a question/offer lead.
+- Submit property listings for human review, edit and resubmit corrections, or withdraw a listing. Text changes and image changes pause public visibility until a moderator reviews the new version.
+- Upload up to six real property photos per listing. JPEG, PNG and WebP are checked against their file signatures, stored in a separate persistent volume, and served only for published listings or to an authorized owner/admin while a listing is private. Images use explicit seller-photo versus illustrative-image labels; fallback imagery is never represented as the actual home.
+- Request a property viewing or send a question/offer lead; owners can mark enquiries contacted, accepted, declined or completed, and requesters can cancel eligible requests.
+- Receive in-app notifications for review decisions, incoming enquiries, messages, agent-application reviews and deal events. Notifications have per-account read state and unread counts.
+- Update the account name/phone and change the password. Changing a password increases a token version so older bearer sessions are rejected by the API.
 - Open property-specific conversations and send authenticated messages.
 - Create deal workspaces, propose a commission percentage and written terms, acknowledge the fee terms, and record deal-stage history.
 - Upload evidence PDFs and images privately, list permitted document metadata, and download through an authorization-checked API route.
@@ -52,7 +55,7 @@ The repository is named **dealer** and the interface is currently branded **Deal
 
 ### Important limits
 - Listing review is an internal moderation step, **not a land-title verification or legal ownership guarantee**.
-- The document endpoint checks file size, allowed MIME type and basic file signatures, but does not scan for malware. Do not use it for real national IDs, title documents or contracts until production-grade storage, scanning, retention and access controls have been reviewed.
+- The document/photo endpoints enforce request sizes, allowlisted MIME types and file-signature checks, but do not scan for malware, re-encode/decode images or strip metadata. Do not upload real identity documents or title certificates until production-grade storage, scanning, retention and access controls have been reviewed. Do not use it for real national IDs, title documents or contracts until production-grade storage, scanning, retention and access controls have been reviewed.
 - The commission workspace records proposed terms and acknowledgements. It does not create a legally vetted agreement, hold money, run escrow or execute a payment.
 - Evidence is hashed and logged in MongoDB. A hash can establish that a particular byte sequence matches a recorded digest; it cannot prove that a document is genuine or that the property belongs to the person who uploaded it.
 - The in-app agent directory and application review flow are implemented; identity checking, professional references and proof of regulated qualifications remain future work.
@@ -69,7 +72,7 @@ The repository is named **dealer** and the interface is currently branded **Deal
 | Data store | MongoDB 8 | Accounts, property listings, favourites, leads, conversations, messages, deals and audit records |
 | Password hashing | BCrypt | One-way password hash storage |
 | API token | HMAC-SHA256 signed bearer token | Eight-hour session expiry |
-| Private files | Local private volume in Docker | Evidence file bytes, served only through an authorized API handler |
+| Private files | Separate Docker volumes for private evidence and listing photos | Evidence bytes require authorization; photos are public only while the listing is published |
 | Web container | Nginx Alpine | Static SPA hosting, route fallback, compression and security headers |
 | Local orchestration | Docker Compose | API, frontend, MongoDB and persistent storage |
 
@@ -283,7 +286,8 @@ Build macOS DMG artifacts on a macOS build machine with npm run build:mac; build
 | VITE_API_URL | Yes for deployment | Public API base URL baked into the web build |
 | BOOTSTRAP_ADMIN_EMAIL | Optional | Email for creating the first administrator |
 | BOOTSTRAP_ADMIN_PASSWORD | Optional | First administrator password, minimum 14 characters |
-| DOCUMENT_STORAGE | No | Private file storage path inside the API container |
+| DOCUMENT_STORAGE | No | Private document storage path inside the API container |
+| LISTING_IMAGE_STORAGE | No | Listing photo storage path inside the API container; Docker Compose sets this to /data/listing-images |
 
 Keep .env out of version control. .env.example is only a template. Never put database credentials, JWT signing keys or private documents into frontend environment variables, source code, browser storage or public GitHub files.
 
@@ -297,6 +301,18 @@ Keep .env out of version control. .env.example is only a template. Never put dat
 - rejected: not publicly visible.
 
 Public queries always filter to published. Review decisions are stored with an actor, timestamp and optional note in the listing record and audit events.
+
+### Listing photos and moderation
+
+Property photos use a different storage and access policy from titles, IDs and contracts:
+
+- Owners can add up to six JPEG, PNG or WebP photos per listing, maximum 8 MiB each. Filenames are metadata only; bytes are stored under server-generated UUID paths.
+- Upload and removal endpoints verify the listing owner. Photos are recorded in a dedicated listing_images collection and the listing_images Docker volume.
+- Public photo delivery checks that the photo is still attached to a listing and only serves it without authentication when that listing is published. For a private or pending listing, the caller must be the owner or an administrator.
+- Adding or removing a photo moves the listing back to pending_review and resets its platform review status. A photo change must not leave an old approval attached to a different set of images.
+- The frontend marks seller-uploaded images and explicitly labels fallback illustrations. Illustrations are not evidence of the condition or appearance of an actual property.
+
+This implementation checks MIME type, size and a small file signature. It is not an image malware scanner, metadata scrubber or image-processing pipeline. For production, add decoding/re-encoding, pixel/dimension limits, EXIF metadata stripping, moderation workflows for image contents and managed private/object storage with backup/retention controls.
 
 ### Private evidence
 
@@ -344,8 +360,13 @@ Example listing search:
 | Method | Path | Access | Purpose |
 |---|---|---|---|
 | POST | /api/v1/auth/register | Public | Register an ordinary member |
-| POST | /api/v1/auth/login | Public | Verify credentials and return token |
+| POST | /api/v1/auth/login | Public | Verify credentials and return token, with an in-process failed-login throttle |
 | GET | /api/v1/auth/me | Bearer | Return current profile |
+| PATCH | /api/v1/me/profile | Bearer | Update display name and phone |
+| PATCH | /api/v1/me/password | Bearer | Change password and invalidate older sessions |
+| GET | /api/v1/me/notifications | Bearer | Read account notifications and unread count |
+| PATCH | /api/v1/notifications/:id/read | Bearer | Mark one of the current user's notifications as read |
+| POST | /api/v1/me/notifications/read-all | Bearer | Mark all of the current user's notifications as read |
 
 Registration body:
 
@@ -361,7 +382,12 @@ Registration body:
 | Method | Path | Access | Purpose |
 |---|---|---|---|
 | POST | /api/v1/listings | Bearer | Submit a listing into pending_review |
-| GET | /api/v1/me/listings | Bearer | Current user's listing submissions |
+| GET | /api/v1/me/listings | Bearer | Current user's listing submissions and moderator notes |
+| PATCH | /api/v1/me/listings/:id | Owner | Edit a listing and return it to review |
+| POST | /api/v1/me/listings/:id/withdraw | Owner | Withdraw a published or pending listing |
+| POST | /api/v1/me/listings/:listingId/images | Owner | Add a JPEG, PNG or WebP property photo (8 MiB each, six per listing) |
+| DELETE | /api/v1/me/listings/:listingId/images/:imageId | Owner | Remove a property photo and return the listing to review |
+| GET | /api/v1/listing-images/:id | Public if published; owner/admin if private | Serve a listing photo only while attached to a listing |
 | GET | /api/v1/admin/listings/pending | Admin | Property review queue |
 | GET | /api/v1/me/agent-profile | Bearer | Read the current user's latest agent application |
 | POST | /api/v1/agents/apply | Bearer | Submit a profile for agent review |
@@ -395,6 +421,7 @@ Valid decisions are approve, reject and request_changes.
 | DELETE | /api/v1/favorites/:listingId | Bearer | Remove saved listing |
 | POST | /api/v1/leads | Bearer | Create a viewing request, question or offer |
 | GET | /api/v1/me/leads | Bearer | Leads where the user is requester or owner |
+| PATCH | /api/v1/leads/:id/status | Enquiry participant | Advance an enquiry through role-specific valid states |
 | GET | /api/v1/me/conversations | Bearer | Current user's conversations |
 | POST | /api/v1/conversations | Bearer | Open or reuse the conversation for a listing |
 | GET | /api/v1/conversations/:id/messages | Participant | Read a conversation |
@@ -455,6 +482,8 @@ MongoDB collections created by the API:
 | deals | participants, commissionPercent, commissionTerms, feeAcceptedBy, stage, history | Application workflow and acknowledgement |
 | documents | publicId, listingId, uploadedBy, fileName, contentType, sizeBytes, filePath | filePath is removed from API responses |
 | agent_applications | publicId, userId, name, phone, showPhone, bio, districts, experienceYears, status | Human-reviewed agent profiles; public directory only includes approved profiles |
+| listing_images | publicId, listingId, uploadedBy, contentType, sizeBytes, filePath | Separate image storage metadata; filesystem path is never returned |
+| notifications | publicId, userId, type, title, body, destination, readAt | Account-scoped notifications and unread state |
 | audit_events | eventId, type, subjectId, actorId, evidenceHash, createdAt | Event trail and content digest lookup |
 
 Database indexes and retention policies should be explicitly configured and tested before large-scale deployment. The current build does not promise that the audit collection is immutable against a database administrator.
@@ -490,16 +519,19 @@ Vite will display the local development URL. In development the app is served wi
 ### Build and static analysis
 
     # From frontend/
+    npm run test
     npm run build
 
     # From backend/
     dart analyze
+    dart test
 
     # From repository root
+    python scripts/check_api_routes.py
     docker compose config
     docker compose up --build
 
-Run these checks after each substantial change. The GitHub Actions workflow at .github/workflows/quality.yml runs the frontend production build and Dart static analysis on pushes and pull requests to main. Check the Actions tab for the actual result of the latest run; a committed workflow is not proof that a build passed.
+GitHub Actions runs frontend unit tests and the production build, Dart analysis and tests, plus a route-contract script that detects duplicate/missing critical endpoints. Check the Actions tab for actual results. A committed workflow is not proof that checks passed.
 
 ## Checks and troubleshooting
 
@@ -549,9 +581,11 @@ Before a public launch, add HTTPS end-to-end, credential rate limits and lockout
 
 ## Roadmap before a public launch
 
-- [ ] Add automated Dart unit and API integration tests using a disposable MongoDB database.
+- [x] Add Dart unit tests for validation, signed tokens, expiry, tampered signatures and failed-login protection.
+- [x] Add frontend tests for empty API states and responsive navigation, plus a CI route-contract checker.
+- [ ] Add API integration tests against a disposable MongoDB database and browser-level end-to-end tests.
 - [ ] Add frontend component tests, keyboard-navigation tests and responsive browser tests.
-- [ ] Add API rate limits, account verification, password reset and revocable sessions.
+- [ ] Move failed-login throttling from an in-process map to a shared rate limiter, add per-IP/API-wide request limits, account/email verification, password reset and audited session/device management.
 - [ ] Extend agent onboarding with evidence-backed identity checks, professional references and auditable reviewer checklists before making any regulated qualification claims.
 - [ ] Add signed contracts, consent versioning, downloadable receipts and dispute resolution designed with a legal professional.
 - [ ] Add managed private object storage, antivirus/malware scanning, data retention and recovery procedures.
