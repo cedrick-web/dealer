@@ -27,7 +27,7 @@ const message: Message = {
 describe('private messaging view', () => {
   it('renders an authenticated listing thread and participant message', () => {
     render(<MessagingView conversations={[conversation]} selectedConversationId="conversation-1" messages={[message]} userId="owner-1" busy={false} draft="" setDraft={vi.fn()} onSelectConversation={vi.fn()} onRefreshConversations={vi.fn()} onReloadMessages={vi.fn()} onSendMessage={vi.fn()} />);
-    expect(screen.getByText('House in Kinyinya')).toBeTruthy();
+    expect(screen.getAllByText('House in Kinyinya').length).toBeGreaterThan(0);
     expect(screen.getByText('Private, authenticated thread')).toBeTruthy();
     expect(screen.getByText('Can we arrange a visit?')).toBeTruthy();
     expect(screen.getByText('Property participant')).toBeTruthy();
