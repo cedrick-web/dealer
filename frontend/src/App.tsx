@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import {
   ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, Bell, Building2, CalendarClock, Check,
@@ -137,6 +138,7 @@ export default function App() {
   const [pending,setPending] = useState<Listing[]>([]);
   const [pendingAgents,setPendingAgents] = useState<AgentApplication[]>([]);
   const [agentDirectory,setAgentDirectory] = useState<Agent[]>([]);
+  const [agentDirectoryLoading,setAgentDirectoryLoading] = useState(true);
   const [agentApplication,setAgentApplication] = useState<AgentApplication|null>(null);
   const [agentForm,setAgentForm] = useState({phone:'',bio:'',experienceYears:'0',districts:['Gasabo'],showPhone:false});
   const [docs,setDocs] = useState<EvidenceDocument[]>([]);
@@ -231,7 +233,8 @@ export default function App() {
     let alive=true;
     api.health().then(()=>{if(alive)setApiOnline(true)}).catch(()=>{if(alive)setApiOnline(false)});
     api.districts().then(r=>{if(alive)setDistricts(r.data || [])}).catch(()=>{});
-    api.agents().then(r=>{if(alive)setAgentDirectory(r.data || [])}).catch(()=>{});
+    setAgentDirectoryLoading(true);
+    api.agents().then(r=>{if(alive)setAgentDirectory(r.data || [])}).catch(()=>{if(alive)setAgentDirectory([])}).finally(()=>{if(alive)setAgentDirectoryLoading(false)});
     if(localStorage.getItem('dealer.session.v1')) {
       api.me().then(async active=>{if(!alive)return;setUser(active); await refreshWorkspace(active)}).catch(()=>{if(alive){setSessionToken('');setUser(null)}});
     }
@@ -555,8 +558,8 @@ export default function App() {
         </section>}
 
         {view==='agents'&&<section className="view-content">
-          <div className="agent-directory-banner"><div className="agent-directory-icon"><Users size={25}/></div><div><b>Professional property support, with disclosed experience.</b><p>Only profiles approved by the platform team appear in this directory. A profile review is not a government licence or a guarantee of performance.</p></div><div className="agent-banner-actions"><button className="btn btn-outline" onClick={()=>void withBusy(async()=>{const r=await api.agents();setAgentDirectory(r.data||[])})} disabled={busy}><RefreshCw size={15}/>Refresh</button><button className="btn btn-primary" onClick={()=>navTo('agent-application')}>Become an agent <ArrowRight size={15}/></button></div></div>
-          {agentDirectory.filter(agent=>!search||[agent.name,agent.bio,...agent.districts].join(' ').toLowerCase().includes(search.toLowerCase())).length?<div className="agent-directory-grid">{agentDirectory.filter(agent=>!search||[agent.name,agent.bio,...agent.districts].join(' ').toLowerCase().includes(search.toLowerCase())).map(agent=><article className="panel agent-profile-card" key={agent.publicId}><div className="agent-card-top"><span className="agent-avatar"><UserCircle size={27}/></span><StatusPill value="approved"/></div><h3>{agent.name}</h3><div className="agent-experience"><BadgeCheck size={14}/>{agent.experienceYears} years of experience stated</div><p>{agent.bio}</p><div className="agent-districts">{agent.districts.map(d=><span key={d}>{d}</span>)}</div><div className="agent-card-footer">{agent.contactPhone?<a className="btn btn-outline" href={'tel:'+agent.contactPhone}><MessageCircle size={15}/>Contact agent</a>:<span className="muted-copy">Agent has not shared a public phone number.</span>}<small>Updated {dateLabel(agent.updatedAt)}</small></div></article>)}</div>:<EmptyState icon={Users} title="No approved agents match" body={agentDirectory.length?'Change the search terms to find a professional in another area.':'The approved directory is empty while the first agent profiles await review.'} action={()=>{setSearch('');navTo('agent-application')}} button="Apply to join the directory"/>}
+          <div className="agent-directory-banner"><div className="agent-directory-icon"><Users size={25}/></div><div><b>Professional property support, with disclosed experience.</b><p>Only profiles approved by the platform team appear in this directory. A profile review is not a government licence or a guarantee of performance.</p></div><div className="agent-banner-actions"><button className="btn btn-outline" onClick={()=>void withBusy(async()=>{setAgentDirectoryLoading(true);try{const r=await api.agents();setAgentDirectory(r.data||[])}finally{setAgentDirectoryLoading(false)}})} disabled={busy}><RefreshCw size={15}/>Refresh</button><button className="btn btn-primary" onClick={()=>navTo('agent-application')}>Become an agent <ArrowRight size={15}/></button></div></div>
+          {agentDirectoryLoading?<div className="agent-directory-grid" aria-label="Loading approved agent profiles">{[0,1,2].map(index=><Card className="panel agent-profile-card agent-profile-skeleton" key={index}><div className="agent-card-top"><Skeleton className="h-11 w-11 rounded-xl"/><Skeleton className="h-5 w-16 rounded-full"/></div><Skeleton className="mt-4 h-4 w-2/3"/><Skeleton className="mt-3 h-3 w-1/2"/><Skeleton className="mt-5 h-3 w-full"/><Skeleton className="mt-2 h-3 w-5/6"/><Skeleton className="mt-2 h-3 w-4/5"/><div className="mt-5 flex gap-2"><Skeleton className="h-6 w-16 rounded"/><Skeleton className="h-6 w-20 rounded"/></div><Skeleton className="mt-5 h-8 w-full rounded"/></Card>)}</div>:agentDirectory.filter(agent=>!search||[agent.name,agent.bio,...agent.districts].join(' ').toLowerCase().includes(search.toLowerCase())).length?<div className="agent-directory-grid">{agentDirectory.filter(agent=>!search||[agent.name,agent.bio,...agent.districts].join(' ').toLowerCase().includes(search.toLowerCase())).map(agent=><article className="panel agent-profile-card" key={agent.publicId}><div className="agent-card-top"><span className="agent-avatar"><UserCircle size={27}/></span><StatusPill value="approved"/></div><h3>{agent.name}</h3><div className="agent-experience"><BadgeCheck size={14}/>{agent.experienceYears} years of experience stated</div><p>{agent.bio}</p><div className="agent-districts">{agent.districts.map(d=><span key={d}>{d}</span>)}</div><div className="agent-card-footer">{agent.contactPhone?<a className="btn btn-outline" href={'tel:'+agent.contactPhone}><MessageCircle size={15}/>Contact agent</a>:<span className="muted-copy">Agent has not shared a public phone number.</span>}<small>Updated {dateLabel(agent.updatedAt)}</small></div></article>)}</div>:<EmptyState icon={Users} title="No approved agents match" body={agentDirectory.length?'Change the search terms to find a professional in another area.':'The approved directory is empty while the first agent profiles await review.'} action={()=>{setSearch('');navTo('agent-application')}} button="Apply to join the directory"/>}
         </section>}
 
         {view==='agent-application'&&<section className="view-content form-layout">
