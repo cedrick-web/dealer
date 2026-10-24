@@ -252,6 +252,10 @@ export default function App() {
   const navTo = (target:View) => {
     setMobileNav(false);
     if(['dashboard','enquiries','new-listing','my-listings','saved','messages','deals','account','admin','agent-application','agent-review','notifications'].includes(target) && !user) { setReturnView(target); setAuthMode('login'); setAuthOpen(true); setView(target==='new-listing'?'discover':target); return; }
+    if(target==='new-listing') {
+      setEditingListingId(null);setExistingImages([]);setNewListingPhotos([]);
+      setListingForm({title:'',description:'',propertyType:'house',purpose:'sale',district:'Gasabo',sector:'',price:''});
+    }
     setView(target);
     if(target==='notifications'&&user)void refreshNotifications();
   };
@@ -288,7 +292,7 @@ export default function App() {
     setUnreadCount(0);
     flash('All notifications marked as read.');
   });
-  const signOut = () => { setSessionToken('');setUser(null);setMyItems([]);setSavedIds([]);setSavedItems([]);setLeads([]);setConversations([]);setMessages([]);setDeals([]);setAgentApplication(null);setPendingAgents([]);setPending([]);setView('discover');flash(t('You have signed out.','Wasohotse muri konti.')); };
+  const signOut = () => { setSessionToken('');setUser(null);setEditingListingId(null);setExistingImages([]);setNewListingPhotos([]);setListingForm({title:'',description:'',propertyType:'house',purpose:'sale',district:'Gasabo',sector:'',price:''});setMyItems([]);setSavedIds([]);setSavedItems([]);setLeads([]);setConversations([]);setMessages([]);setDeals([]);setAgentApplication(null);setPendingAgents([]);setPending([]);setView('discover');flash(t('You have signed out.','Wasohotse muri konti.')); };
   const saveListing = (item:Listing) => {
     if(!requireUser()) return;
     void withBusy(async()=>{
@@ -325,6 +329,7 @@ export default function App() {
       title:item.title, description:item.description, propertyType:item.propertyType, purpose:item.purpose,
       district:item.location.district, sector:item.location.sector||'', price:String(item.price.amount),
     });
+    setModal(null);
     setView('new-listing');
   };
   const selectListingPhotos = (files:FileList|null) => {
