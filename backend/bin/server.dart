@@ -112,6 +112,7 @@ Future<void> main() async {
   final deals = db.collection('deals');
   final documents = db.collection('documents');
   final agentApplications = db.collection('agent_applications');
+  final notifications = db.collection('notifications');
 
   // Explicit indexes make repeated lookups bounded and protect core identity
   // records from duplicate writes under concurrent requests.
@@ -130,6 +131,32 @@ Future<void> main() async {
   await documents.createIndex(keys: {'publicId': 1}, unique: true, name: 'documents_public_id_unique');
   await agentApplications.createIndex(keys: {'userId': 1, 'updatedAt': -1}, name: 'agent_applications_user_updated');
   await audit.createIndex(keys: {'evidenceHash': 1}, name: 'audit_evidence_hash');
+  await notifications.createIndex(keys: {'userId': 1, 'createdAt': -1}, name: 'notifications_user_created');
+  await notifications.createIndex(keys: {'publicId': 1}, unique: true, name: 'notifications_public_id_unique');
+
+  Future<void> notifyUser({
+    required String? recipientId,
+    required String? actorId,
+    required String type,
+    required String title,
+    required String body,
+    required String destination,
+    String? subjectId,
+  }) async {
+    if (recipientId == null || recipientId.isEmpty || recipientId == actorId) return;
+    await notifications.insertOne({
+      'publicId': uid.v4(),
+      'userId': recipientId,
+      'actorId': actorId,
+      'type': type,
+      'title': clean(title, 140),
+      'body': clean(body, 1000),
+      'destination': destination,
+      'subjectId': subjectId,
+      'readAt': null,
+      'createdAt': now(),
+    });
+  }
 
   // Optional first-run admin bootstrap. Never expose an admin role in public registration.
   final adminEmail = (Platform.environment['BOOTSTRAP_ADMIN_EMAIL'] ?? '').trim().toLowerCase();
@@ -195,6 +222,28 @@ Future<void> main() async {
     final token = issueToken({'sub': person['publicId'], 'email': email, 'role': role, 'exp': DateTime.now().millisecondsSinceEpoch ~/ 1000 + 60 * 60 * 8});
     return reply(200, {'token': token, 'user': publicDoc(person), 'expiresIn': 28800});
   });
+  r.get('/api/v1/me/notifications', (Request q) async {
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
+    final p = q.url.queryParameters;
+    final limit = (int.tryParse(p['limit'] ?? '50') ?? 50).clamp(1, 100);
+    final docs = await notifications.find(where.eq('userId', c['sub']), limit: limit, sort: {'createdAt': -1}).toList();
+    final unread = await notifications.count(where.eq('userId', c['sub']).eq('readAt', null));
+    return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList(), 'unreadCount': unread});
+  });
+  r.patch('/api/v1/notifications/<id>/read', (Request q, String id) async {
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
+    final notification = await notifications.findOne(where.eq('publicId', id).eq('userId', c['sub']));
+    if (notification == null) return reply(404, {'error': 'Notification not found.'});
+    await notifications.updateOne(where.eq('publicId', id).eq('userId', c['sub']), modify.set('readAt', now()));
+    return reply(200, {'id': id, 'read': true});
+  });
+  r.post('/api/v1/me/notifications/read-all', (Request q) async {
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
+    final at = now();
+    await notifications.updateMany(where.eq('userId', c['sub']).eq('readAt', null), modify.set('readAt', at));
+    return reply(200, {'readAll': true, 'readAt': at});
+  });
+
   r.get('/api/v1/auth/me', (Request q) async {
     final claims = await currentUser(q, users); if (claims == null) return unauthenticated();
     final person = asMap(await users.findOne(where.eq('publicId', claims['sub'])));
