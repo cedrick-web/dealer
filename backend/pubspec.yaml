@@ -1,6 +1,6 @@
 name: komisiyoneri_api
-description: Rwanda property marketplace API
-version: 1.0.0
+description: Rwanda property marketplace API with account, listing, messaging, deal and evidence workflows
+version: 1.1.0
 publish_to: none
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -10,3 +10,4 @@ dependencies:
   mongo_dart: ^0.10.3
   crypto: ^3.0.6
   uuid: ^4.5.1
+  bcrypt: ^1.1.3
