@@ -303,7 +303,7 @@ Future<void> main() async {
     final p = q.url.queryParameters;
     final limit = (int.tryParse(p['limit'] ?? '50') ?? 50).clamp(1, 100).toInt();
     final docs = await notifications.modernFind(selector: where.eq('userId', c['sub']), limit: limit, sort: {'createdAt': -1}).toList();
-    final unread = await notifications.count(where.eq('userId', c['sub']).eq('readAt', null));
+    final unread = await notifications.modernFind(selector: where.eq('userId', c['sub']).eq('readAt', null)).length;
     return reply(200, {'data': docs.map((d) => publicDoc(Map<String, dynamic>.from(d))).toList(), 'unreadCount': unread});
   });
   r.patch('/api/v1/notifications/<id>/read', (Request q, String id) async {
