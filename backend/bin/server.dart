@@ -40,6 +40,7 @@ bool passwordMatches(String password, dynamic passwordHash) {
 }
 final secret = Platform.environment['JWT_SECRET'] ?? 'development-only-change-me-before-deploying';
 final storageRoot = Platform.environment['DOCUMENT_STORAGE'] ?? '/data/private-documents';
+final listingImageRoot = Platform.environment['LISTING_IMAGE_STORAGE'] ?? '/data/listing-images';
 final allowedWebOrigins = (Platform.environment['WEB_ORIGINS'] ?? Platform.environment['WEB_ORIGIN'] ?? 'http://localhost:5173,dealer://app').split(',').map((value) => value.trim()).where((value) => value.isNotEmpty).toSet();
 const rwandaDistricts = <String>['Gasabo','Kicukiro','Nyarugenge','Bugesera','Rwamagana','Kamonyi','Musanze','Rubavu','Huye','Muhanga','Rulindo','Rusizi','Gicumbi','Burera','Gakenke','Ngororero','Nyabihu','Rutsiro','Karongi','Nyagatare','Nyamasheke','Nyamagabe','Nyaruguru','Gisagara','Nyanza','Ruhango','Kirehe','Ngoma','Kayonza','Gatsibo'];
 
@@ -144,6 +145,7 @@ Future<void> main() async {
   final messages = db.collection('messages');
   final deals = db.collection('deals');
   final documents = db.collection('documents');
+  final listingImages = db.collection('listing_images');
   final agentApplications = db.collection('agent_applications');
   final notifications = db.collection('notifications');
 
@@ -162,6 +164,8 @@ Future<void> main() async {
   await deals.createIndex(keys: {'participants': 1, 'updatedAt': -1}, name: 'deals_participant_updated');
   await documents.createIndex(keys: {'listingId': 1, 'createdAt': -1}, name: 'documents_listing_created');
   await documents.createIndex(keys: {'publicId': 1}, unique: true, name: 'documents_public_id_unique');
+  await listingImages.createIndex(keys: {'publicId': 1}, unique: true, name: 'listing_images_public_id_unique');
+  await listingImages.createIndex(keys: {'listingId': 1, 'createdAt': -1}, name: 'listing_images_listing_created');
   await agentApplications.createIndex(keys: {'userId': 1, 'updatedAt': -1}, name: 'agent_applications_user_updated');
   await audit.createIndex(keys: {'evidenceHash': 1}, name: 'audit_evidence_hash');
   await notifications.createIndex(keys: {'userId': 1, 'createdAt': -1}, name: 'notifications_user_created');
@@ -430,7 +434,7 @@ Future<void> main() async {
       'publicId': id, 'ownerId': claims['sub'], 'title': title, 'description': description,
       'propertyType': type, 'purpose': purpose, 'location': {'district': district, 'sector': sector},
       'price': {'amount': amount, 'currency': 'RWF', 'period': purpose == 'rent' ? 'month' : 'once'},
-      'status': 'pending_review', 'verification': {'status': 'unverified', 'checks': []},
+      'status': 'pending_review', 'verification': {'status': 'unverified', 'checks': []}, 'images': <dynamic>[],
       'createdAt': createdAt, 'updatedAt': createdAt,
     };
     final digest = sha256.convert(utf8.encode(jsonEncode(record))).toString();
@@ -772,6 +776,108 @@ Future<void> main() async {
     final recipientId = participants.map((value) => value.toString()).firstWhere((value) => value != c['sub'], orElse: () => '');
     await notifyUser(recipientId: recipientId, actorId: c['sub']?.toString(), type: 'fee_acceptance', title: 'Commission terms acknowledged', body: 'A participant acknowledged fee terms for "' + clean(item['listingTitle'], 100) + '".', destination: 'deals', subjectId: id);
     return reply(200, {'id': id, 'feeAcceptedBy': accepted, 'fullyAccepted': accepted.length >= 2});
+  });
+
+  r.post('/api/v1/me/listings/<listingId>/images', (Request q, String listingId) async {
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
+    final listing = asMap(await listings.findOne(where.eq('publicId', listingId).eq('ownerId', c['sub'])));
+    if (listing == null) return reply(404, {'error': 'Your listing was not found.'});
+    if (!['pending_review', 'changes_requested', 'rejected', 'published'].contains(listing['status'])) {
+      return reply(409, {'error': 'Photos cannot be changed in this listing state.'});
+    }
+    final b = await readJson(q, 11 * 1024 * 1024);
+    if (b == null) return reply(413, {'error': 'Image request is too large or invalid. Maximum file size is 8 MiB.'});
+    final fileName = clean(b['fileName'], 180);
+    final altText = clean(b['altText'], 180);
+    final mime = clean(b['contentType'], 80).toLowerCase();
+    final base64Data = b['base64'] is String ? b['base64'] as String : '';
+    const allowed = {'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp'};
+    if (fileName.isEmpty || !allowed.containsKey(mime) || base64Data.isEmpty) {
+      return reply(422, {'error': 'Only JPEG, PNG and WebP property photos are allowed.'});
+    }
+    List<int> bytes;
+    try { bytes = base64Decode(base64Data); } catch (_) { return reply(422, {'error': 'The uploaded image is not valid Base64 data.'}); }
+    if (bytes.isEmpty || bytes.length > 8 * 1024 * 1024) return reply(413, {'error': 'Maximum photo size is 8 MiB.'});
+    final prefix = bytes.take(16).toList();
+    final validMagic = mime == 'image/jpeg'
+      ? prefix.length >= 3 && prefix[0] == 255 && prefix[1] == 216 && prefix[2] == 255
+      : mime == 'image/png'
+        ? prefix.length >= 8 && prefix[0] == 137 && prefix[1] == 80 && prefix[2] == 78 && prefix[3] == 71
+        : prefix.length >= 12 && prefix[0] == 82 && prefix[1] == 73 && prefix[2] == 70 && prefix[3] == 70 && prefix[8] == 87 && prefix[9] == 69 && prefix[10] == 66 && prefix[11] == 80;
+    if (!validMagic) return reply(422, {'error': 'Image signature does not match the selected file type.'});
+    final id = uid.v4(), ext = allowed[mime]!, at = now();
+    final directory = Directory(listingImageRoot); await directory.create(recursive: true);
+    final path = listingImageRoot + Platform.pathSeparator + id + '.' + ext;
+    await File(path).writeAsBytes(bytes, flush: true);
+    final image = {
+      'publicId': id, 'listingId': listingId, 'uploadedBy': c['sub'],
+      'fileName': fileName, 'altText': altText.isEmpty ? 'Property photograph' : altText,
+      'contentType': mime, 'sizeBytes': bytes.length, 'filePath': path, 'createdAt': at,
+    };
+    await listingImages.insertOne(image);
+    final imageCards = List<dynamic>.from(listing['images'] as List? ?? []);
+    imageCards.add({'publicId': id, 'alt': image['altText'], 'contentType': mime, 'sizeBytes': bytes.length});
+    await listings.updateOne(where.eq('publicId', listingId).eq('ownerId', c['sub']), modify
+      .set('images', imageCards)
+      .set('status', 'pending_review')
+      .set('verification', {'status': 'unverified', 'checks': []})
+      .set('reviewNote', '')
+      .set('reviewedBy', '')
+      .set('updatedAt', at));
+    final digest = sha256.convert(bytes).toString();
+    await audit.insertOne({'eventId': uid.v4(), 'type': 'listing.image_uploaded', 'subjectId': id, 'actorId': c['sub'], 'evidenceHash': digest, 'createdAt': at});
+    final admins = await users.find(where.eq('role', 'admin').eq('status', 'active')).toList();
+    for (final rawAdmin in admins) {
+      final admin = Map<String, dynamic>.from(rawAdmin);
+      await notifyUser(recipientId: admin['publicId']?.toString(), actorId: c['sub']?.toString(), type: 'listing_review', title: 'Property photo needs review', body: 'A property listing photo was added or changed.', destination: 'admin', subjectId: listingId);
+    }
+    return reply(201, {'data': publicDoc(image), 'sha256': digest, 'status': 'pending_review', 'message': 'Photo stored. The listing is pending review before it can be shown publicly.'});
+  });
+
+  r.delete('/api/v1/me/listings/<listingId>/images/<imageId>', (Request q, String listingId, String imageId) async {
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
+    final listing = asMap(await listings.findOne(where.eq('publicId', listingId).eq('ownerId', c['sub'])));
+    if (listing == null) return reply(404, {'error': 'Your listing was not found.'});
+    final image = asMap(await listingImages.findOne(where.eq('publicId', imageId).eq('listingId', listingId).eq('uploadedBy', c['sub'])));
+    if (image == null) return reply(404, {'error': 'Property photo not found.'});
+    final current = List<dynamic>.from(listing['images'] as List? ?? []);
+    final updated = current.where((raw) => raw is! Map || raw['publicId'] != imageId).toList();
+    final at = now();
+    await listings.updateOne(where.eq('publicId', listingId).eq('ownerId', c['sub']), modify
+      .set('images', updated)
+      .set('status', 'pending_review')
+      .set('verification', {'status': 'unverified', 'checks': []})
+      .set('reviewNote', '')
+      .set('reviewedBy', '')
+      .set('updatedAt', at));
+    await listingImages.deleteOne(where.eq('publicId', imageId).eq('listingId', listingId));
+    final file = File(image['filePath'] as String);
+    if (await file.exists()) await file.delete();
+    await audit.insertOne({'eventId': uid.v4(), 'type': 'listing.image_removed', 'subjectId': imageId, 'actorId': c['sub'], 'createdAt': at});
+    return reply(200, {'id': imageId, 'status': 'pending_review', 'message': 'Photo removed. The listing remains under review.'});
+  });
+
+  r.get('/api/v1/listing-images/<id>', (Request q, String id) async {
+    final image = asMap(await listingImages.findOne(where.eq('publicId', id)));
+    if (image == null) return reply(404, {'error': 'Property photo not found.'});
+    final listing = asMap(await listings.findOne(where.eq('publicId', image['listingId'])));
+    if (listing == null) return reply(404, {'error': 'Property photo not found.'});
+    final imageIsAttached = (listing['images'] as List? ?? []).any((raw) => raw is Map && raw['publicId'] == id);
+    if (!imageIsAttached) return reply(404, {'error': 'Property photo is no longer attached to a listing.'});
+    final isPublic = listing['status'] == 'published';
+    if (!isPublic) {
+      final c = await currentUser(q, users);
+      if (c == null) return unauthenticated();
+      if (listing['ownerId'] != c['sub'] && c['role'] != 'admin') return reply(403, {'error': 'You are not authorized to view this unpublished property photo.'});
+    }
+    final file = File(image['filePath'] as String);
+    if (!await file.exists()) return reply(410, {'error': 'The property photo file is no longer available.'});
+    return Response.ok(await file.readAsBytes(), headers: {
+      'content-type': image['contentType'] as String? ?? 'application/octet-stream',
+      'content-disposition': 'inline; filename="property-photo-' + id + '"',
+      'cache-control': isPublic ? 'public, max-age=3600' : 'private, no-store',
+      'x-content-type-options': 'nosniff',
+    });
   });
 
   r.get('/api/v1/listings/<listingId>/documents', (Request q, String listingId) async {
