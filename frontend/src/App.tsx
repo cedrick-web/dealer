@@ -1,17 +1,16 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, MotionConfig } from 'motion/react';
 import { PageTransition } from '@/components/app/page-transition';
-import { Reveal } from '@/components/app/reveal';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
 import { ListingCard, PrivateListingImage, PropertyImage } from '@/components/app/property-cards';
-import { money, prettyStage } from '@/lib/property-format';
+import { dateLabel, money, prettyStage } from '@/lib/property-format';
 import { EmptyState, ErrorNote, Field, Metric, NotificationIcon, StatusPill } from '@/components/app/common';
+import { AgentDirectoryView, AgentApplicationView, AgentReviewQueue, type AgentApplicationForm } from '@/components/app/agent-workspace';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -27,7 +26,6 @@ import { api, type Agent, type AgentApplication, type AppNotification, type Conv
 
 type View = 'discover'|'agents'|'agent-application'|'agent-review'|'notifications'|'dashboard'|'enquiries'|'new-listing'|'my-listings'|'saved'|'messages'|'deals'|'trust'|'account'|'admin';
 type AuthMode = 'login'|'register';
-const dateLabel = (value?:string) => value ? new Date(value).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}) : 'Not recorded';
 const stages = ['proposed','viewing','offer','due_diligence','agreement','completed','cancelled'];
 const dealTransitions:Record<string,string[]> = {proposed:['viewing','cancelled'],viewing:['offer','cancelled'],offer:['due_diligence','agreement','cancelled'],due_diligence:['agreement','cancelled'],agreement:['completed','cancelled'],completed:[],cancelled:[]};
 const nextDealStages = (stage:string) => dealTransitions[stage] || [];
@@ -55,7 +53,7 @@ export default function App() {
   const [agentDirectory,setAgentDirectory] = useState<Agent[]>([]);
   const [agentDirectoryLoading,setAgentDirectoryLoading] = useState(true);
   const [agentApplication,setAgentApplication] = useState<AgentApplication|null>(null);
-  const [agentForm,setAgentForm] = useState({phone:'',bio:'',experienceYears:'0',districts:['Gasabo'],showPhone:false});
+  const [agentForm,setAgentForm] = useState<AgentApplicationForm>({phone:'',bio:'',experienceYears:'0',districts:['Gasabo'],showPhone:false});
   const [docs,setDocs] = useState<EvidenceDocument[]>([]);
   const [selectedConversation,setSelectedConversation] = useState('');
   const [user,setUser] = useState<User|null>(null);
@@ -505,22 +503,25 @@ export default function App() {
           {listingHasMore&&<div className="load-more-row"><Button variant="outline" size="lg" disabled={loadingMore} onClick={()=>void loadMoreListings()}>{loadingMore?<><RefreshCw className="animate-spin" size={16}/>Loading more properties…</>:<>Load more properties <ArrowDown size={16}/></>}</Button><span>Showing {items.length} of {listingTotal} published properties from the API.</span></div>}
         </section>}
 
-        {view==='agents'&&<section className="view-content">
-          <div className="agent-directory-banner"><div className="agent-directory-icon"><Users size={25}/></div><div><b>Professional property support, with disclosed experience.</b><p>Only profiles approved by the platform team appear in this directory. A profile review is not a government licence or a guarantee of performance.</p></div><div className="agent-banner-actions"><button className="btn btn-outline" onClick={()=>void withBusy(async()=>{setAgentDirectoryLoading(true);try{const r=await api.agents();setAgentDirectory(r.data||[])}finally{setAgentDirectoryLoading(false)}})} disabled={busy}><RefreshCw size={15}/>Refresh</button><button className="btn btn-primary" onClick={()=>navTo('agent-application')}>Become an agent <ArrowRight size={15}/></button></div></div>
-          {agentDirectoryLoading?<div className="agent-directory-grid" aria-label="Loading approved agent profiles">{[0,1,2].map(index=><Card className="panel agent-profile-card agent-profile-skeleton" key={index}><div className="agent-card-top"><Skeleton className="h-11 w-11 rounded-xl"/><Skeleton className="h-5 w-16 rounded-full"/></div><Skeleton className="mt-4 h-4 w-2/3"/><Skeleton className="mt-3 h-3 w-1/2"/><Skeleton className="mt-5 h-3 w-full"/><Skeleton className="mt-2 h-3 w-5/6"/><Skeleton className="mt-2 h-3 w-4/5"/><div className="mt-5 flex gap-2"><Skeleton className="h-6 w-16 rounded"/><Skeleton className="h-6 w-20 rounded"/></div><Skeleton className="mt-5 h-8 w-full rounded"/></Card>)}</div>:agentDirectory.filter(agent=>!search||[agent.name,agent.bio,...agent.districts].join(' ').toLowerCase().includes(search.toLowerCase())).length?<div className="agent-directory-grid">{agentDirectory.filter(agent=>!search||[agent.name,agent.bio,...agent.districts].join(' ').toLowerCase().includes(search.toLowerCase())).map(agent=><Reveal className="agent-profile-reveal" key={agent.publicId}><article className="panel agent-profile-card"><div className="agent-card-top"><span className="agent-avatar"><UserCircle size={27}/></span><StatusPill value="approved"/></div><h3>{agent.name}</h3><div className="agent-experience"><BadgeCheck size={14}/>{agent.experienceYears} years of experience stated</div><p>{agent.bio}</p><div className="agent-districts">{agent.districts.map(d=><span key={d}>{d}</span>)}</div><div className="agent-card-footer">{agent.contactPhone?<a className="btn btn-outline" href={'tel:'+agent.contactPhone}><MessageCircle size={15}/>Contact agent</a>:<span className="muted-copy">Agent has not shared a public phone number.</span>}<small>Updated {dateLabel(agent.updatedAt)}</small></div></article></Reveal>)}</div>:<EmptyState icon={Users} title="No approved agents match" body={agentDirectory.length?'Change the search terms to find a professional in another area.':'The approved directory is empty while the first agent profiles await review.'} action={()=>{setSearch('');navTo('agent-application')}} button="Apply to join the directory"/>}
-        </section>}
+        {view==='agents'&&<AgentDirectoryView
+          agents={agentDirectory}
+          loading={agentDirectoryLoading}
+          search={search}
+          busy={busy}
+          onRefresh={()=>void withBusy(async()=>{setAgentDirectoryLoading(true);try{const r=await api.agents();setAgentDirectory(r.data||[])}finally{setAgentDirectoryLoading(false)}})}
+          onBecomeAgent={()=>navTo('agent-application')}
+          onClearSearch={()=>setSearch('')}
+        />}
 
-        {view==='agent-application'&&<section className="view-content form-layout">
-          <form className="panel editor-panel" onSubmit={submitAgentApplication}>
-            <div className="panel-heading"><div><h3>Professional agent profile</h3><p>Give prospective clients accurate information about your experience and service area.</p></div><span className="step-count">AGENT / 01</span></div>
-            {agentApplication&&<div className="application-status"><div><b>Latest application status</b><small>Submitted {dateLabel(agentApplication.createdAt)}</small></div><StatusPill value={agentApplication.status}/></div>}
-            {agentApplication?.reviewNote&&<div className="review-explainer"><FileCheck2 size={17}/><div><b>Reviewer feedback</b><p>{agentApplication.reviewNote}</p></div></div>}
-            {agentApplication?.status==='approved'?<EmptyState icon={BadgeCheck} title="Your agent profile is approved" body="Your public profile is visible in the agent directory. Contact support if you need to change the public details." action={()=>navTo('agents')} button="View agent directory"/>:
-            agentApplication?.status==='pending_review'?<EmptyState icon={CalendarClock} title="Your application is awaiting review" body="The public directory will show your profile only after the review team approves it." action={()=>navTo('agents')} button="Preview agent directory"/>:
-            <><div className="form-grid"><Field label="Phone number for review"><input required minLength={7} maxLength={40} value={agentForm.phone} onChange={e=>setAgentForm({...agentForm,phone:e.target.value})} placeholder="+250…"/></Field><Field label="Years of experience"><input required type="number" min="0" max="60" step="1" value={agentForm.experienceYears} onChange={e=>setAgentForm({...agentForm,experienceYears:e.target.value})}/></Field><Field label="Professional biography" wide><textarea required minLength={50} maxLength={1200} rows={5} value={agentForm.bio} onChange={e=>setAgentForm({...agentForm,bio:e.target.value})} placeholder="Describe your property experience, professional approach, local knowledge and how you help buyers or sellers make informed decisions."/><small className="field-help">{agentForm.bio.length}/1200 characters. Do not claim a licence, verification or qualification you do not hold.</small></Field><div className="field field-wide"><span>Service districts</span><div className="district-picker">{districts.map(d=><label key={d} className="district-option"><input type="checkbox" checked={agentForm.districts.includes(d)} onChange={e=>setAgentForm(prev=>({...prev,districts:e.target.checked?Array.from(new Set([...prev.districts,d])):prev.districts.filter(x=>x!==d)}))}/><span>{d}</span></label>)}</div><small className="field-help">Select between 1 and 8 districts where you can realistically serve clients. Selected: {agentForm.districts.length}/8</small></div><label className="public-phone-option"><input type="checkbox" checked={agentForm.showPhone} onChange={e=>setAgentForm({...agentForm,showPhone:e.target.checked})}/><span><b>Show my phone in the public directory</b><small>By opting in, you consent to displaying this number on your approved public profile. Otherwise, it stays private to the application review.</small></span></label></div><div className="review-explainer"><LockKeyhole size={18}/><div><b>Review is not a government licence</b><p>Submitting this form does not grant agent credentials. Platform staff will review it before the profile appears. Provide only information you are comfortable sharing with the review team.</p></div></div><div className="form-footer"><span>By submitting, you confirm the profile is accurate and that you have permission to share the phone number.</span><button className="btn btn-primary" disabled={busy||agentForm.districts.length<1||agentForm.districts.length>8} type="submit">{busy?'Submitting…':'Submit agent application'}<ArrowRight size={16}/></button></div></>}
-          </form>
-          <aside className="panel side-checklist"><div className="checklist-icon"><ShieldCheck size={22}/></div><h3>What reviewers look for</h3><p>Quality and honesty matter more than marketing claims.</p>{['A clear, specific professional biography','Realistic service areas and contact details','Accurate experience claims','Consent before publishing a phone number','Willingness to record fee terms and deal milestones'].map((x,i)=><div className="checklist-item" key={x}><span>{i+1}</span>{x}</div>)}<div className="tip-box"><Sparkles size={16}/><span>Only approved profiles appear in the public directory. Approval does not establish legal qualifications or guarantee a transaction.</span></div></aside>
-        </section>}
+        {view==='agent-application'&&<AgentApplicationView
+          application={agentApplication}
+          form={agentForm}
+          setForm={setAgentForm}
+          districts={districts}
+          busy={busy}
+          onSubmit={submitAgentApplication}
+          onViewDirectory={()=>navTo('agents')}
+        />}
 
         {view==='enquiries'&&<section className="view-content enquiries-view">
           <div className="enquiry-toolbar"><div><span className="count-pill">{leads.length} total</span><span className="notifications-caption">Every status update is logged and notifies the other participant.</span></div><button className="btn btn-outline btn-sm" onClick={()=>void withBusy(async()=>refreshWorkspace(user!))} disabled={busy}><RefreshCw size={14}/>Refresh</button></div>
@@ -587,11 +588,15 @@ export default function App() {
         </section>}
 
         {view==='admin'&&<section className="view-content">{user?.role!=='admin'?<EmptyState icon={LockKeyhole} title="Administrator access required" body="This queue is only available to an authenticated admin account."/>:pending.length?<div className="admin-list">{pending.map(item=><article className="panel review-card" key={item.publicId}><PropertyImage item={item} variant="mini"/><div className="review-body"><div className="listing-type">{item.propertyType} · {item.purpose}</div><h3>{item.title}</h3><p>{item.location.district}{item.location.sector?', '+item.location.sector:''} · {money(item.price.amount)}</p><p className="review-description">{item.description}</p><label className="field-label">Decision note<textarea rows={2} value={reviewNotes[item.publicId]||''} onChange={e=>setReviewNotes({...reviewNotes,[item.publicId]:e.target.value})} placeholder="Record what was checked, what is missing or what needs correction."/></label><div className="review-actions"><button className="btn btn-outline" onClick={()=>{setDocs([]);setModal(item)}}><FileCheck2 size={15}/>Review evidence</button><button className="btn btn-primary" onClick={()=>runReview(item,'approve')} disabled={busy}><CheckCircle2 size={15}/>Approve</button><button className="btn btn-outline" onClick={()=>runReview(item,'request_changes')} disabled={busy}>Request changes</button><button className="btn btn-danger" onClick={()=>runReview(item,'reject')} disabled={busy}>Reject</button></div></div></article>)}</div>:<EmptyState icon={ClipboardList} title="Review queue is clear" body="New submissions appear here when users send properties for review." action={()=>void withBusy(async()=>{const r=await api.adminPending();setPending(r.data)})} button="Refresh queue"/>}</section>}
-          {view==='agent-review'&&<section className="view-content">
-          {user?.role!=='admin'?<EmptyState icon={LockKeyhole} title="Administrator access required" body="Agent applications contain private contact information and can only be reviewed by an administrator."/>:
-          pendingAgents.length?<div className="admin-list">{pendingAgents.map(app=><article className="panel agent-review-card" key={app.publicId}><div className="agent-review-head"><span className="agent-avatar"><UserCircle size={27}/></span><div><span className="deal-label">AGENT APPLICATION / {app.publicId.slice(0,8).toUpperCase()}</span><h3>{app.name}</h3><small>{app.experienceYears} years experience stated · Submitted {dateLabel(app.createdAt)}</small></div><StatusPill value={app.status}/></div><div className="agent-review-details"><div><small>Private phone for review</small><b>{app.phone}</b><span>{app.showPhone?'Applicant consents to public display if approved.':'Keep phone private if approved.'}</span></div><div><small>Selected service districts</small><div className="agent-districts">{app.districts.map(d=><span key={d}>{d}</span>)}</div></div></div><p className="agent-review-bio">{app.bio}</p><label className="field-label">Decision note<textarea rows={2} value={reviewNotes[app.publicId]||''} onChange={e=>setReviewNotes({...reviewNotes,[app.publicId]:e.target.value})} placeholder="Explain what was reviewed or what needs correction."/></label><div className="review-actions"><button className="btn btn-primary" disabled={busy} onClick={()=>reviewAgent(app,'approve')}><CheckCircle2 size={15}/>Approve profile</button><button className="btn btn-outline" disabled={busy} onClick={()=>reviewAgent(app,'request_changes')}>Request changes</button><button className="btn btn-danger" disabled={busy} onClick={()=>reviewAgent(app,'reject')}>Reject</button></div><p className="review-caution"><ShieldCheck size={14}/>Approval publishes the profile on this platform. It does not certify a government licence or guarantee professional performance.</p></article>)}</div>:
-          <EmptyState icon={Users} title="No agent applications pending" body="New professional profile applications will appear here after users submit them." action={()=>void withBusy(async()=>{const r=await api.adminPendingAgents();setPendingAgents(r.data||[])})} button="Refresh applications"/>}
-        </section>}
+          {view==='agent-review'&&<AgentReviewQueue
+          userRole={user?.role}
+          pending={pendingAgents}
+          busy={busy}
+          notes={reviewNotes}
+          onNoteChange={(id,value)=>setReviewNotes(previous=>({...previous,[id]:value}))}
+          onReview={reviewAgent}
+          onRefresh={()=>void withBusy(async()=>{const r=await api.adminPendingAgents();setPendingAgents(r.data||[])})}
+        />}
         </PageTransition></AnimatePresence>
     </main>
     </div>
