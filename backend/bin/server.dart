@@ -39,6 +39,26 @@ bool passwordMatches(String password, dynamic passwordHash) {
   if (passwordHash is! String || passwordHash.isEmpty) return false;
   try { return BCrypt.checkpw(password, passwordHash); } catch (_) { return false; }
 }
+
+bool hasAllowedFileSignature(String mime, List<int> bytes) {
+  if (mime == 'application/pdf') {
+    return bytes.length >= 4 && bytes[0] == 37 && bytes[1] == 80 && bytes[2] == 68 && bytes[3] == 70;
+  }
+  if (mime == 'image/jpeg') {
+    return bytes.length >= 3 && bytes[0] == 255 && bytes[1] == 216 && bytes[2] == 255;
+  }
+  if (mime == 'image/png') {
+    const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+    return bytes.length >= signature.length &&
+      List<int>.generate(signature.length, (index) => bytes[index])
+        .asMap().entries.every((entry) => entry.value == signature[entry.key]);
+  }
+  if (mime == 'image/webp') {
+    return bytes.length >= 12 && bytes[0] == 82 && bytes[1] == 73 && bytes[2] == 70 && bytes[3] == 70 &&
+      bytes[8] == 87 && bytes[9] == 69 && bytes[10] == 66 && bytes[11] == 80;
+  }
+  return false;
+}
 final secret = Platform.environment['JWT_SECRET'] ?? 'development-only-change-me-before-deploying';
 final storageRoot = Platform.environment['DOCUMENT_STORAGE'] ?? '/data/private-documents';
 final listingImageRoot = Platform.environment['LISTING_IMAGE_STORAGE'] ?? '/data/listing-images';
@@ -805,13 +825,9 @@ Future<void> main() async {
     List<int> bytes;
     try { bytes = base64Decode(base64Data); } catch (_) { return reply(422, {'error': 'The uploaded image is not valid Base64 data.'}); }
     if (bytes.isEmpty || bytes.length > 8 * 1024 * 1024) return reply(413, {'error': 'Maximum photo size is 8 MiB.'});
-    final prefix = bytes.take(16).toList();
-    final validMagic = mime == 'image/jpeg'
-      ? prefix.length >= 3 && prefix[0] == 255 && prefix[1] == 216 && prefix[2] == 255
-      : mime == 'image/png'
-        ? prefix.length >= 8 && prefix[0] == 137 && prefix[1] == 80 && prefix[2] == 78 && prefix[3] == 71 && prefix[4] == 13 && prefix[5] == 10 && prefix[6] == 26 && prefix[7] == 10
-        : prefix.length >= 12 && prefix[0] == 82 && prefix[1] == 73 && prefix[2] == 70 && prefix[3] == 70 && prefix[8] == 87 && prefix[9] == 69 && prefix[10] == 66 && prefix[11] == 80;
-    if (!validMagic) return reply(422, {'error': 'Image signature does not match the selected file type.'});
+    if (!hasAllowedFileSignature(mime, bytes)) {
+      return reply(422, {'error': 'Image signature does not match the selected file type.'});
+    }
     final id = uid.v4(), ext = allowed[mime]!, at = now();
     final directory = Directory(listingImageRoot); await directory.create(recursive: true);
     final path = listingImageRoot + Platform.pathSeparator + id + '.' + ext;
@@ -913,12 +929,9 @@ Future<void> main() async {
     List<int> bytes;
     try { bytes = base64Decode(base64Data); } catch (_) { return reply(422, {'error': 'The uploaded file is not valid Base64 data.'}); }
     if (bytes.isEmpty || bytes.length > 8 * 1024 * 1024) return reply(413, {'error': 'Maximum file size is 8 MiB.'});
-    final prefix = bytes.take(16).toList();
-    final validMagic = mime == 'application/pdf' ? utf8.decode(prefix.take(4).toList(), allowMalformed: true) == '%PDF'
-      : mime == 'image/jpeg' ? prefix.length >= 3 && prefix[0] == 255 && prefix[1] == 216 && prefix[2] == 255
-      : mime == 'image/png' ? prefix.length >= 8 && prefix[0] == 137 && prefix[1] == 80 && prefix[2] == 78 && prefix[3] == 71 && prefix[4] == 13 && prefix[5] == 10 && prefix[6] == 26 && prefix[7] == 10
-      : prefix.length >= 12 && prefix[0] == 82 && prefix[1] == 73 && prefix[2] == 70 && prefix[3] == 70 && prefix[8] == 87 && prefix[9] == 69 && prefix[10] == 66 && prefix[11] == 80;
-    if (!validMagic) return reply(422, {'error': 'File signature does not match the selected file type.'});
+    if (!hasAllowedFileSignature(mime, bytes)) {
+      return reply(422, {'error': 'File signature does not match the selected file type.'});
+    }
     final id = uid.v4(), ext = allowed[mime]!;
     final directory = Directory(storageRoot); await directory.create(recursive: true);
     final path = storageRoot + Platform.pathSeparator + id + '.' + ext;
