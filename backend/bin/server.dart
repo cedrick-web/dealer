@@ -109,7 +109,7 @@ Future<void> main() async {
   });
   r.get('/api/v1/districts', (Request q) => reply(200, {'data': [
     'Gasabo','Kicukiro','Nyarugenge','Bugesera','Rwamagana','Kamonyi','Musanze','Rubavu','Huye','Muhanga',
-    'Rulindo','Rusizi','Gicumbi','Burera','Gakenke','Ngororero','Nyabihu','Rutsiro','Karongi',
+    'Rulindo','Rusizi','Gicumbi','Burera','Gakenke','Ngororero','Nyabihu','Rutsiro','Karongi','Nyagatare',
     'Nyamasheke','Nyamagabe','Nyaruguru','Gisagara','Nyanza','Ruhango','Kirehe','Ngoma','Kayonza','Gatsibo'
   ]}));
 
