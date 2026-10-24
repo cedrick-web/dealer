@@ -365,7 +365,7 @@ Future<void> main() async {
     final district = clean(loc['district'], 60), sector = clean(loc['sector'], 80);
     final type = validType(b['propertyType']), purpose = validPurpose(b['purpose']);
     final rawPrice = asMap(b['price'])?['amount'];
-    final amount = rawPrice is num ? rawPrice.toInt() : int.tryParse('$rawPrice');
+    final amount = rawPrice is num && rawPrice == rawPrice.toInt() ? rawPrice.toInt() : int.tryParse('$rawPrice');
     if (title.length < 8 || description.length < 30 || !rwandaDistricts.contains(district) || type == null || purpose == null || amount == null || amount < 1) {
       return reply(422, {'error': 'Title must be 8+ characters, description 30+, a valid Rwanda district, type, purpose and a positive integer RWF price are required.'});
     }
