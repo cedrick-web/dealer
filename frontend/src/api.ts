@@ -5,7 +5,7 @@ export type User = { publicId: string; name: string; email: string; phone?: stri
 export type Listing = {
   publicId: string; ownerId?: string; title: string; description: string; propertyType: 'house'|'apartment'|'land'|'commercial'|'room';
   purpose: 'sale'|'rent'; location: { district: string; sector?: string }; price: { amount: number; currency?: string; period?: string };
-  status?: string; reviewNote?: string; reviewedBy?: string; verification?: { status: string; checks?: unknown[] }; createdAt?: string;
+  status?: string; reviewNote?: string; reviewedBy?: string; images?: ListingImage[]; verification?: { status: string; checks?: unknown[] }; createdAt?: string;
 };
 export type Lead = { publicId: string; listingId: string; listingTitle: string; ownerId: string; requesterId: string; type: string; message?: string; preferredAt?: string; status: string; lastUpdatedBy?: string; createdAt: string; updatedAt?: string };
 export type Conversation = { publicId: string; listingId: string; listingTitle: string; participants: string[]; ownerId: string; counterpartyId?: string; lastMessage?: string; updatedAt: string };
@@ -15,6 +15,7 @@ export type Deal = {
   feeAcceptedBy: string[]; stage: string; history: { stage: string; actorId: string; at: string; note?: string }[]; updatedAt: string;
 };
 export type EvidenceDocument = { publicId: string; listingId: string; fileName: string; contentType: string; sizeBytes: number; createdAt: string; reviewStatus: string };
+export type ListingImage = { publicId:string; alt:string; contentType:string; sizeBytes:number };
 export type ApiResult<T> = { data: T; [key: string]: unknown };
 export type Agent = { publicId:string; name:string; bio:string; districts:string[]; experienceYears:number; contactPhone?:string|null; updatedAt:string };
 export type AgentApplication = { publicId:string; userId:string; name:string; phone:string; showPhone:boolean; bio:string; districts:string[]; experienceYears:number; status:string; reviewNote?:string; createdAt:string; updatedAt:string };
@@ -88,6 +89,31 @@ export const api = {
   createDeal: (input:{listingId:string;commissionPercent:number;commissionTerms:string}) => request<ApiResult<Deal>>('/api/v1/deals', json(input)),
   updateDealStage: (id:string,stage:string,note:string) => request('/api/v1/deals/' + encodeURIComponent(id) + '/stage', {method:'PATCH',body:JSON.stringify({stage,note})}),
   acceptFee: (id:string) => request('/api/v1/deals/' + encodeURIComponent(id) + '/accept-fee', json({})),
+  listingImageUrl: (id:string) => API + '/api/v1/listing-images/' + encodeURIComponent(id),
+  loadListingImage: async (id:string) => {
+    const headers = new Headers(); if (sessionToken) headers.set('Authorization','Bearer ' + sessionToken);
+    const response = await fetch(API + '/api/v1/listing-images/' + encodeURIComponent(id), {headers});
+    if (!response.ok) { let msg = 'Could not load this property image.'; try { msg = (await response.json()).error || msg; } catch {} throw new Error(msg); }
+    return URL.createObjectURL(await response.blob());
+  },
+  uploadListingImage: async (listingId:string,file:File,altText:string) => {
+    if(file.size===0||file.size>8*1024*1024)throw new Error('Each property photo must be smaller than 8 MiB.');
+    if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('Property photos must be JPEG, PNG or WebP.');
+    const base64=await new Promise<string>((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onload=()=>resolve(String(reader.result).split(',')[1]||'');
+      reader.onerror=()=>reject(new Error('Could not read this photo.'));
+      reader.readAsDataURL(file);
+    });
+    return request<{data:ListingImage;sha256:string;status:string;message:string}>(
+      '/api/v1/me/listings/'+encodeURIComponent(listingId)+'/images',
+      json({fileName:file.name,altText:altText.trim(),contentType:file.type,base64}),
+    );
+  },
+  deleteListingImage: (listingId:string,imageId:string) => request<{id:string;status:string;message:string}>(
+    '/api/v1/me/listings/'+encodeURIComponent(listingId)+'/images/'+encodeURIComponent(imageId),
+    {method:'DELETE'},
+  ),
   documents: (listingId:string) => request<ApiResult<EvidenceDocument[]>>('/api/v1/listings/' + encodeURIComponent(listingId) + '/documents'),
   uploadDocument: async (listingId:string,file:File) => {
     if (file.size > 8 * 1024 * 1024) throw new Error('Maximum file size is 8 MiB.');
