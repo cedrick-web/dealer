@@ -1,12 +1,28 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Agent, AgentApplication, AppNotification, Lead } from '@/api';
 import { AgentDirectoryView, AgentApplicationView, AgentReviewQueue, type AgentApplicationForm } from './agent-workspace';
 import { EnquiriesView } from './enquiries-view';
 import { NotificationsView } from './notifications-view';
 
-afterEach(cleanup);
+beforeEach(() => {
+  vi.stubGlobal('IntersectionObserver', class {
+    readonly root: Element | Document | null = null;
+    readonly rootMargin = '0px';
+    readonly thresholds: ReadonlyArray<number> = [0];
+    constructor(_callback: IntersectionObserverCallback) {}
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords(): IntersectionObserverEntry[] { return []; }
+  });
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const agent: Agent = {
   publicId: 'agent-1',
