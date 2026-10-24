@@ -1,0 +1,50 @@
+{
+  "name": "dealer-desktop",
+  "version": "1.2.0",
+  "private": true,
+  "description": "Dealer desktop shell for the Rwanda property marketplace",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dev": "cross-env DEALER_DEV_URL=http://localhost:5173 electron .",
+    "build:win": "electron-builder --win nsis",
+    "build:mac": "electron-builder --mac dmg",
+    "build:linux": "electron-builder --linux AppImage"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^35.1.5",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "rw.dealer.propertydesk",
+    "productName": "Dealer",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../frontend/dist",
+        "to": "web"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "mac": {
+      "target": ["dmg"]
+    },
+    "linux": {
+      "target": ["AppImage"]
+    }
+  }
+}
