@@ -795,12 +795,37 @@ Future<void> main() async {
       return reply(409, {'error': 'Both participants must acknowledge the written commission terms before the deal can move to agreement.'});
     }
     final history = List<dynamic>.from(item['history'] as List? ?? []);
-    history.add({'stage': stage, 'actorId': c['sub'], 'at': now(), 'note': clean(b?['note'], 500)});
-    await deals.updateOne(where.eq('publicId', id), modify.set('stage', stage).set('updatedAt', now()).set('history', history));
     final participants = List<dynamic>.from(item['participants'] as List? ?? []);
     final recipientId = participants.map((value) => value.toString()).firstWhere((value) => value != c['sub'], orElse: () => '');
-    await notifyUser(recipientId: recipientId, actorId: c['sub']?.toString(), type: 'deal_stage', title: 'Deal milestone updated', body: 'The deal for "' + clean(item['listingTitle'], 100) + '" moved to ' + prettyStageForNotification(stage) + '.', destination: 'deals', subjectId: id);
-    return reply(200, {'id': id, 'stage': stage, 'history': history});
+    final at = now();
+    if (stage == 'completed') {
+      final confirmations = List<dynamic>.from(item['completionConfirmedBy'] as List? ?? []);
+      if (!confirmations.map((value) => value.toString()).contains(c['sub'].toString())) {
+        confirmations.add(c['sub']);
+      }
+      if (confirmations.map((value) => value.toString()).toSet().length < 2) {
+        history.add({'stage': 'completion_confirmation_pending', 'actorId': c['sub'], 'at': at, 'note': 'Participant requested completion confirmation'});
+        await deals.updateOne(where.eq('publicId', id), modify
+          .set('completionConfirmedBy', confirmations)
+          .set('updatedAt', at)
+          .set('history', history));
+        await audit.insertOne({'eventId': uid.v4(), 'type': 'deal.completion_confirmation_requested', 'subjectId': id, 'actorId': c['sub'], 'createdAt': at});
+        await notifyUser(recipientId: recipientId, actorId: c['sub']?.toString(), type: 'deal_completion', title: 'Confirm deal completion', body: 'The other participant says the deal for "' + clean(item['listingTitle'], 100) + '" is complete. Confirm it in your workspace to close the record.', destination: 'deals', subjectId: id);
+        return reply(200, {'id': id, 'stage': currentStage, 'completionPending': true, 'completionConfirmedBy': confirmations, 'history': history});
+      }
+      history.add({'stage': stage, 'actorId': c['sub'], 'at': at, 'note': clean(b?['note'], 500)});
+      await deals.updateOne(where.eq('publicId', id), modify
+        .set('stage', stage)
+        .set('completionConfirmedBy', confirmations)
+        .set('updatedAt', at)
+        .set('history', history));
+    } else {
+      history.add({'stage': stage, 'actorId': c['sub'], 'at': at, 'note': clean(b?['note'], 500)});
+      await deals.updateOne(where.eq('publicId', id), modify.set('stage', stage).set('updatedAt', at).set('history', history));
+    }
+    await notifyUser(recipientId: recipientId, actorId: c['sub']?.toString(), type: stage == 'completed' ? 'deal_completion' : 'deal_stage', title: stage == 'completed' ? 'Deal completed by both parties' : 'Deal milestone updated', body: 'The deal for "' + clean(item['listingTitle'], 100) + '" moved to ' + prettyStageForNotification(stage) + '.', destination: 'deals', subjectId: id);
+    await audit.insertOne({'eventId': uid.v4(), 'type': stage == 'completed' ? 'deal.completed' : 'deal.stage_updated', 'subjectId': id, 'actorId': c['sub'], 'stage': stage, 'createdAt': at});
+    return reply(200, {'id': id, 'stage': stage, 'completionConfirmedBy': stage == 'completed' ? List<dynamic>.from(item['completionConfirmedBy'] as List? ?? []) : null, 'history': history});
   });
   r.post('/api/v1/deals/<id>/accept-fee', (Request q, String id) async {
     final c = await currentUser(q, users); if (c == null) return unauthenticated();
