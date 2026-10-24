@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -48,6 +48,19 @@ describe('Dealer application shell', () => {
     expect(await screen.findByText('No published properties match yet')).toBeTruthy();
     expect(screen.queryByText('Contemporary family home in a quiet neighborhood')).toBeNull();
     expect(screen.getByText(/Only published listings from the API appear here/)).toBeTruthy();
+  });
+
+  it('sends the maximum RWF budget to the API instead of filtering only the first page locally', async () => {
+    render(<App />);
+    await screen.findByText('No published properties match yet');
+    const budget = screen.getByLabelText('Maximum price in Rwandan francs');
+    fireEvent.change(budget, { target: { value: '100000000' } });
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('maxPrice=100000000'),
+        expect.anything(),
+      );
+    });
   });
 
   it('uses empty results honestly while allowing the buy and rent filter controls', async () => {
