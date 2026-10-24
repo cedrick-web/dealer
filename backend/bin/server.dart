@@ -104,14 +104,13 @@ Future<void> main() async {
 
   final r = Router();
   r.get('/health', (Request q) async {
-    final ping = await db.serverStatus();
+    final ping = await db.pingCommand();
     return reply(200, {'status': 'ok', 'service': 'komisiyoneri-api', 'database': ping.isNotEmpty ? 'connected' : 'unknown', 'time': now()});
   });
   r.get('/api/v1/districts', (Request q) => reply(200, {'data': [
     'Gasabo','Kicukiro','Nyarugenge','Bugesera','Rwamagana','Kamonyi','Musanze','Rubavu','Huye','Muhanga',
-    'Rulindo','Nyagatare','Rusizi','Gicumbi','Burera','Gakenke','Ngororero','Nyabihu','Rutsiro','Karongi',
-    'Nyamasheke','Nyamagabe','Nyaruguru','Gisagara','Nyanza','Ruhango','Kirehe','Ngoma','Kayonza','Gatsibo',
-    'Kabarore','Nyagatare','Kigali'
+    'Rulindo','Rusizi','Gicumbi','Burera','Gakenke','Ngororero','Nyabihu','Rutsiro','Karongi',
+    'Nyamasheke','Nyamagabe','Nyaruguru','Gisagara','Nyanza','Ruhango','Kirehe','Ngoma','Kayonza','Gatsibo'
   ]}));
 
   r.post('/api/v1/auth/register', (Request q) async {
