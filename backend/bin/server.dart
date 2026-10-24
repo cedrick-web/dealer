@@ -608,7 +608,11 @@ Future<void> main() async {
       final relatedLead = await leads.findOne(where.eq('listingId', listingId).eq('ownerId', ownerId).eq('requesterId', counterpartyId));
       if (relatedLead == null) return reply(403, {'error': 'You can only initiate an owner-side conversation with someone who has enquired about this listing.'});
     } else if (listing['status'] != 'published') {
-      return reply(404, {'error': 'This property is no longer publicly available for a new conversation.'});
+      final relatedLead = await leads.findOne(where.eq('listingId', listingId).eq('ownerId', ownerId).eq('requesterId', c['sub']));
+      final relatedDeal = await deals.findOne(where.eq('listingId', listingId).eq('participants', c['sub']));
+      if (relatedLead == null && relatedDeal == null) {
+        return reply(404, {'error': 'This property is no longer publicly available for a new conversation.'});
+      }
     }
     final createdAt = now();
     final item = {
