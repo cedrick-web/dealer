@@ -2,7 +2,6 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 're
 import { AnimatePresence, MotionConfig } from 'motion/react';
 import { PageTransition } from '@/components/app/page-transition';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
