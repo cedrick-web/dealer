@@ -42,7 +42,7 @@ The repository is named **dealer** and the interface is currently branded **Deal
 - Receive in-app notifications for review decisions, incoming enquiries, messages, agent-application reviews and deal events. Notifications have per-account read state and unread counts.
 - Update the account name/phone and change the password. Changing a password increases a token version so older bearer sessions are rejected by the API.
 - Open property-specific conversations and send authenticated messages.
-- Create deal workspaces, propose a commission percentage and written terms, acknowledge the fee terms, and record deal-stage history.
+- Create deal workspaces, propose a commission percentage and written terms, require both parties to acknowledge commission terms before agreement, and record deal-stage history. Completion remains pending until both participants confirm it.
 - Upload evidence PDFs and images privately, list permitted document metadata, and download through an authorization-checked API route.
 - Check whether an evidence hash exists in the platform audit collection.
 - Use the responsive layout on desktop, tablet and mobile sizes. A web app manifest and service worker provide PWA installation support on compatible browsers.
@@ -56,7 +56,7 @@ The repository is named **dealer** and the interface is currently branded **Deal
 ### Important limits
 - Listing review is an internal moderation step, **not a land-title verification or legal ownership guarantee**.
 - The document/photo endpoints enforce request sizes, allowlisted MIME types and file-signature checks, but do not scan for malware, re-encode/decode images or strip metadata. Do not upload real identity documents or title certificates until production-grade storage, scanning, retention and access controls have been reviewed. Do not use it for real national IDs, title documents or contracts until production-grade storage, scanning, retention and access controls have been reviewed.
-- The commission workspace records proposed terms and acknowledgements. It does not create a legally vetted agreement, hold money, run escrow or execute a payment.
+- The commission workspace records proposed terms and acknowledgements. Both participants must acknowledge the proposal before moving to agreement, and both must confirm completion before the record closes. It does not create a legally vetted agreement, hold money, run escrow or execute a payment.
 - Evidence is hashed and logged in MongoDB. A hash can establish that a particular byte sequence matches a recorded digest; it cannot prove that a document is genuine or that the property belongs to the person who uploaded it.
 - The in-app agent directory and application review flow are implemented; identity checking, professional references and proof of regulated qualifications remain future work.
 - The Solidity/blockchain integration is **not deployed or wired into the running application**. Do not describe current evidence records as blockchain-verified.
@@ -446,7 +446,7 @@ Allowed lead types are viewing, question and offer. Message body:
 |---|---|---|---|
 | GET | /api/v1/me/deals | Participant | Read the current user's deals |
 | POST | /api/v1/deals | Bearer | Propose a deal against a published listing |
-| PATCH | /api/v1/deals/:id/stage | Participant | Record a milestone transition and note |
+| PATCH | /api/v1/deals/:id/stage | Participant | Record a valid milestone transition; completion requires two participant confirmations |
 | POST | /api/v1/deals/:id/accept-fee | Participant | Record the current user's fee acknowledgement |
 
 Create-deal body:
