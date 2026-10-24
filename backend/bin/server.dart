@@ -113,6 +113,24 @@ Future<void> main() async {
   final documents = db.collection('documents');
   final agentApplications = db.collection('agent_applications');
 
+  // Explicit indexes make repeated lookups bounded and protect core identity
+  // records from duplicate writes under concurrent requests.
+  await users.createIndex(keys: {'email': 1}, unique: true, name: 'users_email_unique');
+  await users.createIndex(keys: {'publicId': 1}, unique: true, name: 'users_public_id_unique');
+  await listings.createIndex(keys: {'publicId': 1}, unique: true, name: 'listings_public_id_unique');
+  await listings.createIndex(keys: {'status': 1, 'createdAt': -1}, name: 'listings_status_created');
+  await listings.createIndex(keys: {'ownerId': 1, 'createdAt': -1}, name: 'listings_owner_created');
+  await favorites.createIndex(keys: {'userId': 1, 'listingId': 1}, unique: true, name: 'favorites_user_listing_unique');
+  await leads.createIndex(keys: {'ownerId': 1, 'createdAt': -1}, name: 'leads_owner_created');
+  await leads.createIndex(keys: {'requesterId': 1, 'createdAt': -1}, name: 'leads_requester_created');
+  await conversations.createIndex(keys: {'participants': 1, 'updatedAt': -1}, name: 'conversations_participant_updated');
+  await messages.createIndex(keys: {'conversationId': 1, 'createdAt': 1}, name: 'messages_conversation_created');
+  await deals.createIndex(keys: {'participants': 1, 'updatedAt': -1}, name: 'deals_participant_updated');
+  await documents.createIndex(keys: {'listingId': 1, 'createdAt': -1}, name: 'documents_listing_created');
+  await documents.createIndex(keys: {'publicId': 1}, unique: true, name: 'documents_public_id_unique');
+  await agentApplications.createIndex(keys: {'userId': 1, 'updatedAt': -1}, name: 'agent_applications_user_updated');
+  await audit.createIndex(keys: {'evidenceHash': 1}, name: 'audit_evidence_hash');
+
   // Optional first-run admin bootstrap. Never expose an admin role in public registration.
   final adminEmail = (Platform.environment['BOOTSTRAP_ADMIN_EMAIL'] ?? '').trim().toLowerCase();
   final adminPassword = Platform.environment['BOOTSTRAP_ADMIN_PASSWORD'] ?? '';
