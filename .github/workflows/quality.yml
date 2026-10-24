@@ -46,3 +46,15 @@ jobs:
       - name: Analyze API
         working-directory: backend
         run: dart analyze
+      - name: Run Dart unit tests
+        working-directory: backend
+        run: dart test
+
+  route-contract:
+    name: API route contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Check for duplicate or missing routes
+        run: python scripts/check_api_routes.py
