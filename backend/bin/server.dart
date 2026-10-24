@@ -60,8 +60,11 @@ Future<Map<String, dynamic>?> currentUser(Request req, DbCollection users) async
   final raw = await users.findOne(where.eq('publicId', claims['sub']));
   final person = asMap(raw);
   if (person == null || person['status'] != 'active') return null;
-  // Roles and account status are taken from MongoDB on every protected request,
-  // so an expired/disabled/demoted account cannot keep stale access through a token.
+  // Roles, account status and token version come from MongoDB on each protected
+  // request, so role changes and password changes invalidate stale sessions.
+  final tokenVersion = person['tokenVersion'] is int ? person['tokenVersion'] as int : 0;
+  final claimVersion = claims['ver'] is int ? claims['ver'] as int : 0;
+  if (tokenVersion != claimVersion) return null;
   return <String, dynamic>{
     ...claims,
     'role': person['role'] as String? ?? 'member',
@@ -194,7 +197,7 @@ Future<void> main() async {
   if (adminEmail.isNotEmpty && adminPassword.length >= 14 && utf8.encode(adminPassword).length <= 72 && !adminPassword.startsWith('CHANGE_ME') && await users.findOne(where.eq('email', adminEmail)) == null) {
     await users.insertOne({
       'publicId': uid.v4(), 'name': 'Platform administrator', 'email': adminEmail,
-      'passwordHash': BCrypt.hashpw(adminPassword, BCrypt.gensalt()), 'role': 'admin',
+      'passwordHash': BCrypt.hashpw(adminPassword, BCrypt.gensalt()), 'role': 'admin', 'tokenVersion': 0,
       'createdAt': now(), 'status': 'active',
     });
     stdout.writeln('Bootstrap administrator created from environment credentials.');
@@ -231,11 +234,11 @@ Future<void> main() async {
     if (await users.findOne(where.eq('email', email)) != null) return reply(409, {'error': 'An account with that email already exists.'});
     final person = {
       'publicId': uid.v4(), 'name': name, 'email': email, 'phone': phone,
-      'passwordHash': BCrypt.hashpw(password, BCrypt.gensalt()), 'role': 'member',
+      'passwordHash': BCrypt.hashpw(password, BCrypt.gensalt()), 'role': 'member', 'tokenVersion': 0,
       'status': 'active', 'createdAt': now(),
     };
     await users.insertOne(person);
-    final token = issueToken({'sub': person['publicId'], 'email': email, 'role': 'member', 'exp': DateTime.now().millisecondsSinceEpoch ~/ 1000 + 60 * 60 * 8});
+    final token = issueToken({'sub': person['publicId'], 'email': email, 'role': 'member', 'ver': 0, 'exp': DateTime.now().millisecondsSinceEpoch ~/ 1000 + 60 * 60 * 8});
     return reply(201, {'token': token, 'user': publicDoc(person), 'expiresIn': 28800});
   });
   r.post('/api/v1/auth/login', (Request q) async {
@@ -258,7 +261,8 @@ Future<void> main() async {
     }
     clearLoginFailures(throttleKey);
     final role = person['role'] as String? ?? 'member';
-    final token = issueToken({'sub': person['publicId'], 'email': email, 'role': role, 'exp': DateTime.now().millisecondsSinceEpoch ~/ 1000 + 60 * 60 * 8});
+    final version = person['tokenVersion'] is int ? person['tokenVersion'] as int : 0;
+    final token = issueToken({'sub': person['publicId'], 'email': email, 'role': role, 'ver': version, 'exp': DateTime.now().millisecondsSinceEpoch ~/ 1000 + 60 * 60 * 8});
     return reply(200, {'token': token, 'user': publicDoc(person), 'expiresIn': 28800});
   });
   r.get('/api/v1/me/notifications', (Request q) async {
@@ -288,6 +292,48 @@ Future<void> main() async {
     final person = asMap(await users.findOne(where.eq('publicId', claims['sub'])));
     if (person == null || person['status'] != 'active') return unauthenticated();
     return reply(200, {'user': publicDoc(person)});
+  });
+
+  r.patch('/api/v1/me/profile', (Request q) async {
+    final claims = await currentUser(q, users); if (claims == null) return unauthenticated();
+    final b = await readJson(q, 20 * 1024);
+    if (b == null) return reply(400, {'error': 'Send a valid JSON object.'});
+    final name = clean(b['name'], 100);
+    final phone = clean(b['phone'], 40);
+    if (name.length < 2) return reply(422, {'error': 'Name must contain at least 2 characters.'});
+    final at = now();
+    await users.updateOne(where.eq('publicId', claims['sub']), modify.set('name', name).set('phone', phone).set('updatedAt', at));
+    final updated = asMap(await users.findOne(where.eq('publicId', claims['sub'])));
+    if (updated == null) return unauthenticated();
+    await audit.insertOne({'eventId': uid.v4(), 'type': 'account.profile_updated', 'subjectId': claims['sub'], 'actorId': claims['sub'], 'createdAt': at});
+    return reply(200, {'user': publicDoc(updated), 'updatedAt': at});
+  });
+
+  r.patch('/api/v1/me/password', (Request q) async {
+    final claims = await currentUser(q, users); if (claims == null) return unauthenticated();
+    final b = await readJson(q, 20 * 1024);
+    if (b == null) return reply(400, {'error': 'Send a valid JSON object.'});
+    final currentPassword = b['currentPassword'] is String ? b['currentPassword'] as String : '';
+    final newPassword = b['newPassword'] is String ? b['newPassword'] as String : '';
+    if (utf8.encode(newPassword).length < 12 || utf8.encode(newPassword).length > 72) {
+      return reply(422, {'error': 'New password must be between 12 and 72 UTF-8 bytes.'});
+    }
+    final person = asMap(await users.findOne(where.eq('publicId', claims['sub'])));
+    if (person == null || !passwordMatches(currentPassword, person['passwordHash'])) {
+      return reply(401, {'error': 'Current password is incorrect.'});
+    }
+    if (passwordMatches(newPassword, person['passwordHash'])) {
+      return reply(422, {'error': 'Choose a password different from the current password.'});
+    }
+    final version = (person['tokenVersion'] is int ? person['tokenVersion'] as int : 0) + 1;
+    final at = now();
+    await users.updateOne(where.eq('publicId', claims['sub']), modify.set('passwordHash', BCrypt.hashpw(newPassword, BCrypt.gensalt())).set('tokenVersion', version).set('updatedAt', at));
+    await audit.insertOne({'eventId': uid.v4(), 'type': 'account.password_changed', 'subjectId': claims['sub'], 'actorId': claims['sub'], 'createdAt': at});
+    final role = person['role'] as String? ?? 'member';
+    final email = person['email'] as String? ?? claims['email']?.toString() ?? '';
+    final token = issueToken({'sub': claims['sub'], 'email': email, 'role': role, 'ver': version, 'exp': DateTime.now().millisecondsSinceEpoch ~/ 1000 + 60 * 60 * 8});
+    final updated = asMap(await users.findOne(where.eq('publicId', claims['sub'])));
+    return reply(200, {'token': token, 'user': updated == null ? null : publicDoc(updated), 'expiresIn': 28800});
   });
 
   r.get('/api/v1/me/agent-profile', (Request q) async {
