@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, Bell, Building2, CalendarClock, Check,
   CheckCircle2, ChevronDown, ChevronRight, CircleAlert, ClipboardList, Download, FileCheck2,
@@ -96,13 +96,21 @@ export default function App() {
 
   const t = (en:string,rw:string) => language==='en'?en:rw;
   const flash = (text:string) => { setNotice(text); window.setTimeout(()=>setNotice(current=>current===text?'':current),6500); };
+  const listingRequestSequence = useRef(0);
   const refreshListings = useCallback(async () => {
+    const sequence = ++listingRequestSequence.current;
+    const params:Record<string,string> = {limit:'60',purpose};
+    if(district!=='All Rwanda')params.district=district;
+    if(propertyType!=='All properties')params.type=propertyType;
+    if(search.trim())params.q=search.trim();
     try {
-      const result = await api.listings({limit:'60'});
-      setItems(result.data || []);
-      setApiOnline(true);
-    } catch (e) { setApiOnline(false); throw e; }
-  },[]);
+      const result = await api.listings(params);
+      if(sequence===listingRequestSequence.current){setItems(result.data || []);setApiOnline(true);}
+    } catch (e) {
+      if(sequence===listingRequestSequence.current)setApiOnline(false);
+      throw e;
+    }
+  },[purpose,district,propertyType,search]);
   const refreshWorkspace = useCallback(async (activeUser:User) => {
     setProfileForm({name:activeUser.name||'',phone:activeUser.phone||''});
     const safe = async <T,>(fn:()=>Promise<T>, fallback:T) => { try { return await fn(); } catch { return fallback; } };
@@ -145,12 +153,12 @@ export default function App() {
     api.health().then(()=>{if(alive)setApiOnline(true)}).catch(()=>{if(alive)setApiOnline(false)});
     api.districts().then(r=>{if(alive)setDistricts(r.data || [])}).catch(()=>{});
     api.agents().then(r=>{if(alive)setAgentDirectory(r.data || [])}).catch(()=>{});
-    refreshListings().catch(()=>{});
     if(localStorage.getItem('dealer.session.v1')) {
       api.me().then(async active=>{if(!alive)return;setUser(active); await refreshWorkspace(active)}).catch(()=>{if(alive){setSessionToken('');setUser(null)}});
     }
     return ()=>{alive=false};
-  },[refreshListings,refreshWorkspace]);
+  },[refreshWorkspace]);
+  useEffect(()=>{const timer=window.setTimeout(()=>{refreshListings().catch(()=>{})},250);return()=>window.clearTimeout(timer)},[refreshListings]);
   useEffect(()=>{if(view==='messages'&&selectedConversation)refreshMessages(selectedConversation)},[view,selectedConversation,refreshMessages]);
   useEffect(()=>{if(!user)return;const timer=window.setInterval(()=>{void refreshNotifications()},45000);return()=>window.clearInterval(timer)},[user?.publicId,refreshNotifications]);
 
