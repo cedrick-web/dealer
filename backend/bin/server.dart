@@ -110,7 +110,7 @@ Map<String, dynamic>? userFrom(Request req) {
   try {
     final claims = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[0]))));
     if (claims is! Map<String, dynamic>) return null;
-    if ((claims['exp'] is int ? claims['exp'] as int : 0) < DateTime.now().millisecondsSinceEpoch ~/ 1000) return null;
+    if ((claims['exp'] is int ? claims['exp'] as int : 0) <= DateTime.now().millisecondsSinceEpoch ~/ 1000) return null;
     return claims;
   } catch (_) { return null; }
 }
