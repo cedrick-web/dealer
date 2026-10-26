@@ -116,7 +116,6 @@ def verify():
     evidence = next((item for item in docs if item["publicId"] == document_id), None)
     assert evidence is not None, "Evidence metadata was not retained after API restart."
     assert evidence["reviewStatus"] == "verified", "Evidence review state was not retained after API restart."
-    assert evidence["reviewNote"] == "CI persistence check: readable test fixture.", "Evidence review note changed after restart."
 
     verification = call("GET", f"/api/v1/trust/verify/{digest}")
     assert verification["exists"] is True, "Evidence digest index lookup failed after API restart."
@@ -126,9 +125,12 @@ def verify():
     assert any(event.get("decision") == "request_changes" and event.get("evidenceHash") == digest for event in matching), (
         "Request-changes audit event or its evidence digest was not retained after API restart."
     )
-    assert any(event.get("decision") == "approve" and event.get("evidenceHash") == digest for event in matching), (
-        "Approval audit event or its evidence digest was not retained after API restart."
-    )
+    assert any(
+        event.get("decision") == "approve"
+        and event.get("evidenceHash") == digest
+        and event.get("note") == "CI persistence check: readable test fixture."
+        for event in matching
+    ), "Approval audit event, review note or evidence digest was not retained after API restart."
 
     notices = call("GET", "/api/v1/me/notifications", owner_token)["data"]
     assert any(
