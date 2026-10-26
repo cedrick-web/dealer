@@ -91,7 +91,14 @@ The repository is named **dealer** and the interface is currently branded **Deal
 
 ## Frontend design system
 
-The frontend is being migrated incrementally to reusable components. The existing \`styles.css\` design system remains active while new screens and primitives use Tailwind and shared component contracts. That avoids a risky all-at-once rewrite of working API flows.
+The frontend is being migrated incrementally to reusable components.
+
+### Workspace navigation and responsive UI
+
+- Main workspaces have addressable URLs: `/`, `/agents`, `/dashboard`, `/enquiries`, `/new-listing`, `/my-listings`, `/saved`, `/messages`, `/deals`, `/trust`, `/account`, `/notifications` and the applicable agent/admin workspaces.
+- Navigation updates browser history, and Back/Forward restores the selected workspace. The route layer is intentionally dependency-free to preserve the current Vite setup and existing view/API state while the application is migrated incrementally.
+- `src/styles.polish.css` is loaded after the legacy design system and Tailwind entrypoint. It establishes a more readable type scale, consistent control sizing, clearer focus states, and responsive layouts for desktop, tablet and narrow mobile screens.
+- Existing API-connected forms and workflows remain the source of truth. The frontend does not create fake inventory or replace server-side authorization with client-side visibility rules. The existing \`styles.css\` design system remains active while new screens and primitives use Tailwind and shared component contracts. That avoids a risky all-at-once rewrite of working API flows.
 
 - **Tailwind CSS v4** is configured through \`@tailwindcss/vite\` and \`src/tailwind.css\`. Shared CSS variables define the green/neutral palette, foregrounds, cards, borders, focus rings and radius tokens. The Tailwind import uses important utilities so utility classes can layer predictably alongside the legacy, unlayered CSS during migration.
 - **shadcn-style components** are owned in \`src/components/ui/\` and composed from Radix primitives where keyboard, focus and dialog behavior matter. \`components.json\` stores the shared aliases and style settings. Components include Button, Card, Input, Textarea, Badge, Label, Separator, Dialog, Tabs, DropdownMenu, Table, Tooltip and Skeleton.
