@@ -11,6 +11,7 @@ The repository is named **dealer** and the interface is currently branded **Deal
 - [Product capabilities](#product-capabilities)
 - [Architecture](#architecture)
 - [Frontend design system](#frontend-design-system)
+- [Shareable property details](#shareable-property-details)
 - [Repository layout](#repository-layout)
 - [Run locally with Docker Desktop](#run-locally-with-docker-desktop)
 - [Open the app](#open-the-app)
@@ -661,3 +662,10 @@ Before a public launch, add HTTPS end-to-end, credential rate limits and lockout
 ### Saved-property comparison
 
 The authenticated Saved workspace supports a side-by-side comparison of up to three saved listings. Users can compare asking price (including rent period), district/sector, property type, sale-versus-rent purpose, listing status, and the listing description, then open a listing directly from the comparison. The comparison uses current API-backed saved listings and does not claim to provide a valuation or legal verification. The selection is a temporary workspace state; saved properties themselves remain persisted by the API.
+
+
+### Shareable property details
+
+Every listing opened from the marketplace uses a stable frontend URL in the form `/property/:publicId`. The detail route loads the listing from the existing `GET /api/v1/listings/:id` endpoint, so a copied URL can be opened directly or refreshed without relying on in-memory discovery results. Browser back/forward navigation synchronizes the selected property and workspace route. The detail dialog includes **Copy property link**; when clipboard permissions are unavailable, the app shows the URL for manual copying.
+
+This route does not bypass API visibility rules: the API remains responsible for deciding whether a listing can be returned to the current visitor. Unknown, withdrawn, or inaccessible listings should be handled by the API response and must not be treated as proof that the property is legitimate.
