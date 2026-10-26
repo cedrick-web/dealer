@@ -657,3 +657,7 @@ Before a public launch, add HTTPS end-to-end, credential rate limits and lockout
 ---
 
 **Built for an accountable property journey in Rwanda. Verify the evidence, write the agreement, and use official channels for the legal transfer.**
+
+### Saved-property comparison
+
+The authenticated Saved workspace supports a side-by-side comparison of up to three saved listings. Users can compare asking price (including rent period), district/sector, property type, sale-versus-rent purpose, listing status, and the listing description, then open a listing directly from the comparison. The comparison uses current API-backed saved listings and does not claim to provide a valuation or legal verification. The selection is a temporary workspace state; saved properties themselves remain persisted by the API.
