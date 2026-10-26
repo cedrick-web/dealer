@@ -160,7 +160,18 @@ def main():
     assert call("GET", f"/api/v1/documents/{document_id}/download", buyer_token, raw=True).startswith(b"%PDF")
     call("GET", "/api/v1/me/notifications", owner_token)
     call("GET", "/api/v1/me/notifications", buyer_token)
-    print("PASS: listing moderation, image and private document storage/access, evidence hash, favourites, viewing leads, private messaging, agent review, commission acceptance and two-party deal completion.")
+
+    # Withdrawal is an owner-only terminal lifecycle state. It must disappear
+    # from public search and must not be silently resurrected by editing.
+    call("POST", f"/api/v1/me/listings/{listing_id}/withdraw", buyer_token, {}, 404)
+    withdrawn = call("POST", f"/api/v1/me/listings/{listing_id}/withdraw", owner_token, {})
+    assert withdrawn["status"] == "withdrawn"
+    owner_after_withdraw = call("GET", "/api/v1/me/listings", owner_token)["data"]
+    assert next(x for x in owner_after_withdraw if x["publicId"] == listing_id)["status"] == "withdrawn"
+    call("GET", f"/api/v1/listings/{listing_id}", expected=404)
+    call("PATCH", f"/api/v1/me/listings/{listing_id}", owner_token, revised_input, 409)
+    call("POST", f"/api/v1/me/listings/{listing_id}/withdraw", owner_token, {}, 409)
+    print("PASS: listing moderation and resubmission, terminal withdrawal, image and private document storage/access, evidence hash, favourites, viewing leads, private messaging, agent review, commission acceptance and two-party deal completion.")
 
 if __name__ == "__main__":
     main()
