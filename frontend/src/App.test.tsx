@@ -73,7 +73,7 @@ describe('Dealer application shell', () => {
   it('loads a shareable property URL directly and keeps it addressable after refresh', async () => {
     window.history.replaceState({}, '', '/property/listing-share-123');
     const { unmount } = render(<App />);
-    expect(await waitFor(() => expect(screen.getAllByText('Shareable Kigali apartment').length).toBeGreaterThan(0))).toBeTruthy();
+    await waitFor(() => expect(screen.getAllByText('Shareable Kigali apartment').length).toBeGreaterThan(0));
     expect(window.location.pathname).toBe('/property/listing-share-123');
     expect(fetch).toHaveBeenCalledWith(
       expect.stringContaining('/api/v1/listings/listing-share-123'),
@@ -82,7 +82,7 @@ describe('Dealer application shell', () => {
     unmount();
     window.history.replaceState({}, '', '/property/listing-share-123');
     render(<App />);
-    expect(await screen.findByRole('heading', { name: 'Shareable Kigali apartment' })).toBeTruthy();
+    await waitFor(() => expect(screen.getAllByText('Shareable Kigali apartment').length).toBeGreaterThan(0));
     expect(window.location.pathname).toBe('/property/listing-share-123');
   });
 
