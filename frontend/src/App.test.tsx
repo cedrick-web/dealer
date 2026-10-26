@@ -12,6 +12,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 describe('Dealer application shell', () => {
   beforeEach(() => {
+    window.history.replaceState({}, '', '/');
     localStorage.clear();
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -41,6 +42,15 @@ describe('Dealer application shell', () => {
     expect(screen.getByRole('navigation', { name: 'Quick navigation' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Notifications, 0 unread/ })).toBeTruthy();
     expect(screen.getByText('DEALER')).toBeTruthy();
+  });
+
+  it('keeps workspace navigation in the URL and supports browser history', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Saved properties' }));
+    await waitFor(() => expect(window.location.pathname).toBe('/saved'));
+    window.history.pushState({}, '', '/messages');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await waitFor(() => expect(screen.getByRole('heading', { name: /Private messages|Messages/i })).toBeTruthy());
   });
 
   it('does not present imaginary homes when the API has no published inventory', async () => {
