@@ -18,7 +18,7 @@ export function AdminAuditView() {
   const [error, setError] = useState('');
   const [loadedAt, setLoadedAt] = useState('');
 
-  const load = useCallback(async (type = eventType) => {
+  const load = useCallback(async (type = '') => {
     setLoading(true);
     setError('');
     try {
@@ -30,7 +30,7 @@ export function AdminAuditView() {
     } finally {
       setLoading(false);
     }
-  }, [eventType]);
+  }, []);
 
   useEffect(() => { void load(''); }, [load]);
 
@@ -50,7 +50,7 @@ export function AdminAuditView() {
             <h2 id="admin-audit-title">Audit trail</h2>
             <p>Review recorded moderation decisions and evidence events. Audit entries are trace records, not proof of legal ownership or document authenticity.</p>
           </div>
-          <button className="btn btn-outline btn-sm" type="button" onClick={() => void load()} disabled={loading}>
+          <button className="btn btn-outline btn-sm" type="button" onClick={() => void load(eventType)} disabled={loading}>
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
         </div>
