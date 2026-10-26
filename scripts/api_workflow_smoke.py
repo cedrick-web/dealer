@@ -40,6 +40,26 @@ def main():
     throttled = call("POST", "/api/v1/auth/login", expected=429, body={
         "email": throttle_email, "password": "Definitely_Wrong_Password_123"})
     assert "15 minutes" in throttled.get("error", ""), "Login throttle must return a clear retry window."
+    # Public registration must ignore privilege-escalation fields, and password
+    # changes must invalidate every previously issued bearer token.
+    auth_result = call("POST", "/api/v1/auth/register", expected=201, body={
+        "name": "CI Auth Hardening", "email": f"ci-auth-{RUN}@example.test",
+        "password": "CI_Test_Password_12345", "role": "admin", "status": "active"})
+    auth_token = auth_result["token"]
+    assert auth_result["user"]["role"] == "member", "Public registration must never assign privileged roles."
+    call("GET", "/api/v1/auth/me", auth_token)
+    changed_password = call("PATCH", "/api/v1/me/password", auth_token, {
+        "currentPassword": "CI_Test_Password_12345",
+        "newPassword": "CI_New_Password_67890"})
+    replacement_token = changed_password["token"]
+    assert changed_password["user"]["role"] == "member"
+    call("GET", "/api/v1/auth/me", auth_token, expected=401)
+    call("GET", "/api/v1/auth/me", replacement_token, expected=200)
+    call("POST", "/api/v1/auth/login", expected=401, body={
+        "email": f"ci-auth-{RUN}@example.test", "password": "CI_Test_Password_12345"})
+    call("POST", "/api/v1/auth/login", expected=200, body={
+        "email": f"ci-auth-{RUN}@example.test", "password": "CI_New_Password_67890"})
+
     owner_token, _ = register("Owner")
     buyer_token, _ = register("Buyer")
     profile = call("PATCH", "/api/v1/me/profile", owner_token,
