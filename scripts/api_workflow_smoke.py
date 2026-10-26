@@ -135,10 +135,25 @@ def main():
         "bio": "CI profile describing property support and local market experience for prospective clients.",
         "experienceYears": 2, "districts": ["Gasabo", "Kicukiro"], "showPhone": False}, 201)["data"]
     app_id = application["publicId"]
+    call("GET", "/api/v1/admin/agents/pending", buyer_token, expected=403)
     assert any(x["publicId"] == app_id for x in call("GET", "/api/v1/admin/agents/pending", admin)["data"])
-    assert call("PATCH", f"/api/v1/admin/agents/{app_id}/review", admin,
-                {"decision": "approve", "note": "CI approval"})["status"] == "approved"
+    changed = call("PATCH", f"/api/v1/admin/agents/{app_id}/review", admin,
+                   {"decision": "request_changes", "note": "Please clarify the advertised service areas."})
+    assert changed["status"] == "changes_requested"
+    agent_notices = call("GET", "/api/v1/me/notifications", buyer_token)["data"]
+    assert any(n.get("subjectId") == app_id and "clarify the advertised service areas" in n.get("body", "")
+               for n in agent_notices), "Agent applicants must receive the moderation note."
+    call("PATCH", f"/api/v1/admin/agents/{app_id}/review", buyer_token,
+         {"decision": "approve", "note": ""}, 403)
+    approved = call("PATCH", f"/api/v1/admin/agents/{app_id}/review", admin,
+                    {"decision": "approve", "note": "CI approval after applicant correction"})
+    assert approved["status"] == "approved"
+    call("PATCH", f"/api/v1/admin/agents/{app_id}/review", admin,
+         {"decision": "reject", "note": "duplicate terminal decision"}, 404)
     assert any(x["publicId"] == app_id for x in call("GET", "/api/v1/agents")["data"])
+    agent_audit = call("GET", "/api/v1/admin/audit?type=agent.application_reviewed", admin)["data"]
+    assert any(e.get("subjectId") == app_id and e.get("decision") == "request_changes" for e in agent_audit)
+    assert any(e.get("subjectId") == app_id and e.get("decision") == "approve" for e in agent_audit)
 
     deal = call("POST", "/api/v1/deals", buyer_token, {
         "listingId": listing_id, "commissionPercent": 3,
