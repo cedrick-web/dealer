@@ -38,8 +38,9 @@ def prepare():
         "phone": "+250780000055",
     }, expected=201)
     token = registered["token"]
+    title = "Persistence restart check " + run
     listing = call("POST", "/api/v1/listings", token, {
-        "title": "Persistence restart check " + run,
+        "title": title,
         "description": "A published listing used to prove MongoDB state survives API restart.",
         "propertyType": "house",
         "purpose": "sale",
@@ -89,7 +90,7 @@ def prepare():
             "listing_id": listing_id,
             "document_id": document_id,
             "evidence_hash": digest,
-            "title": listing["title"],
+            "title": title,
         }, state)
     print("PASS: created and published a listing and approved a CI-only evidence fixture before API restart.")
 
