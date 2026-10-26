@@ -669,3 +669,10 @@ The authenticated Saved workspace supports a side-by-side comparison of up to th
 Every listing opened from the marketplace uses a stable frontend URL in the form `/property/:publicId`. The detail route loads the listing from the existing `GET /api/v1/listings/:id` endpoint, so a copied URL can be opened directly or refreshed without relying on in-memory discovery results. Browser back/forward navigation synchronizes the selected property and workspace route. The detail dialog includes **Copy property link**; when clipboard permissions are unavailable, the app shows the URL for manual copying.
 
 This route does not bypass API visibility rules: the API remains responsible for deciding whether a listing can be returned to the current visitor. Unknown, withdrawn, or inaccessible listings should be handled by the API response and must not be treated as proof that the property is legitimate.
+
+
+### Private evidence review lifecycle
+
+Evidence uploads are stored privately and start with the `not_reviewed` state. Administrators can mark a document verified, reject it, or request changes through `PATCH /api/v1/admin/documents/:id/review`. Every decision records the reviewer, timestamp, decision, note and original upload digest in the audit log; the listing owner receives an in-app notification. Only administrators can submit review decisions, while document metadata and downloads remain protected by the existing owner/deal-participant/admin authorization checks.
+
+A `verified` document status records a human review decision, not a guarantee of ownership, authenticity, title validity, or legal transfer. Review notes and file access must still be handled as sensitive information.

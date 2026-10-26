@@ -14,7 +14,7 @@ export type Deal = {
   publicId: string; listingId: string; listingTitle: string; participants: string[]; commissionPercent: number; commissionTerms: string;
   feeAcceptedBy: string[]; completionConfirmedBy?: string[]; stage: string; history: { stage: string; actorId: string; at: string; note?: string }[]; updatedAt: string;
 };
-export type EvidenceDocument = { publicId: string; listingId: string; fileName: string; contentType: string; sizeBytes: number; createdAt: string; reviewStatus: string };
+export type EvidenceDocument = { publicId: string; listingId: string; fileName: string; contentType: string; sizeBytes: number; createdAt: string; reviewStatus: string; reviewNote?: string; reviewedBy?: string; reviewedAt?: string };
 export type ListingImage = { publicId:string; alt:string; contentType:string; sizeBytes:number };
 export type ApiResult<T> = { data: T; [key: string]: unknown };
 export type Agent = { publicId:string; name:string; bio:string; districts:string[]; experienceYears:number; contactPhone?:string|null; updatedAt:string };
@@ -135,4 +135,5 @@ export const api = {
   verifyHash: (hash:string) => request<{exists:boolean;meaning:string}>('/api/v1/trust/verify/' + encodeURIComponent(hash)),
   adminPending: () => request<ApiResult<Listing[]>>('/api/v1/admin/listings/pending'),
   adminReview: (id:string,decision:'approve'|'reject'|'request_changes',note:string) => request('/api/v1/admin/listings/' + encodeURIComponent(id) + '/review', {method:'PATCH',body:JSON.stringify({decision,note})}),
+  adminReviewDocument: (id:string,decision:'approve'|'reject'|'request_changes',note:string) => request<{data:EvidenceDocument;status:string;message:string}>('/api/v1/admin/documents/' + encodeURIComponent(id) + '/review', {method:'PATCH',body:JSON.stringify({decision,note})}),
 };

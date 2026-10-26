@@ -60,6 +60,16 @@ def main():
     call("GET", f"/api/v1/listings/{listing_id}/documents", buyer_token, expected=403)
     call("GET", f"/api/v1/documents/{document_id}/download", buyer_token, expected=403)
     call("GET", f"/api/v1/documents/{document_id}/download", expected=401)
+    call("PATCH", f"/api/v1/admin/documents/{document_id}/review", owner_token,
+         {"decision": "approve", "note": "Must be administrator-only"}, 403)
+    changed = call("PATCH", f"/api/v1/admin/documents/{document_id}/review", admin,
+                   {"decision": "request_changes", "note": "Please provide a clearer scan."})
+    assert changed["status"] == "changes_requested"
+    verified = call("PATCH", f"/api/v1/admin/documents/{document_id}/review", admin,
+                    {"decision": "approve", "note": "Readable document received."})
+    assert verified["status"] == "verified"
+    call("PATCH", f"/api/v1/admin/documents/{document_id}/review", admin,
+         {"decision": "unknown", "note": ""}, 422)
 
     reviewed = call("PATCH", f"/api/v1/admin/listings/{listing_id}/review", admin, {
         "decision": "approve", "note": "CI-only approval"})
@@ -112,6 +122,7 @@ def main():
 
     docs = call("GET", f"/api/v1/listings/{listing_id}/documents", buyer_token)["data"]
     assert any(x["publicId"] == document_id for x in docs)
+    assert next(x for x in docs if x["publicId"] == document_id)["reviewStatus"] == "verified"
     assert call("GET", f"/api/v1/documents/{document_id}/download", buyer_token, raw=True).startswith(b"%PDF")
     call("GET", "/api/v1/me/notifications", owner_token)
     call("GET", "/api/v1/me/notifications", buyer_token)

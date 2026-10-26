@@ -1016,6 +1016,42 @@ Future<void> main() async {
     }
     return reply(201, {'data': publicDoc(doc), 'sha256': digest, 'status': 'pending_review', 'note': 'Stored privately. The digest proves a specific byte sequence was recorded, not that the document is genuine. The listing is back in review.'});
   });
+  r.patch('/api/v1/admin/documents/<id>/review', (Request q, String id) async {
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
+    if (c['role'] != 'admin') return reply(403, {'error': 'Administrator access required.'});
+    final b = await readJson(q, 20 * 1024);
+    final decision = clean(b?['decision'], 20);
+    final note = clean(b?['note'], 1000);
+    if (!['approve', 'reject', 'request_changes'].contains(decision)) {
+      return reply(422, {'error': 'Decision must be approve, reject, or request_changes.'});
+    }
+    final doc = asMap(await documents.findOne(where.eq('publicId', id)));
+    if (doc == null) return reply(404, {'error': 'Evidence document not found.'});
+    final listing = asMap(await listings.findOne(where.eq('publicId', doc['listingId'])));
+    final status = decision == 'approve' ? 'verified' : decision == 'reject' ? 'rejected' : 'changes_requested';
+    final at = now();
+    await documents.updateOne(where.eq('publicId', id), modify
+      .set('reviewStatus', status)
+      .set('reviewNote', note)
+      .set('reviewedBy', c['sub'])
+      .set('reviewedAt', at));
+    final uploadEvent = asMap(await audit.findOne(where.eq('subjectId', id).eq('type', 'document.uploaded')));
+    await audit.insertOne({
+      'eventId': uid.v4(), 'type': 'document.reviewed', 'subjectId': id, 'actorId': c['sub'],
+      'decision': decision, 'note': note, 'evidenceHash': uploadEvent?['evidenceHash'], 'createdAt': at,
+    });
+    if (listing != null) {
+      await notifyUser(
+        recipientId: listing['ownerId']?.toString(), actorId: c['sub']?.toString(),
+        type: 'listing_review', title: 'Evidence review updated',
+        body: 'Evidence "' + clean(doc['fileName'], 120) + '" was marked ' + status.replaceAll('_', ' ') + (note.isNotEmpty ? '. Note: ' + note : '.'),
+        destination: 'my-listings', subjectId: doc['listingId']?.toString(),
+      );
+    }
+    final updated = asMap(await documents.findOne(where.eq('publicId', id)));
+    return reply(200, {'data': publicDoc(updated ?? doc), 'status': status, 'message': 'Evidence review recorded: ' + status.replaceAll('_', ' ') + '.'});
+  });
+
   r.get('/api/v1/documents/<id>/download', (Request q, String id) async {
     final c = await currentUser(q, users); if (c == null) return unauthenticated();
     final doc = asMap(await documents.findOne(where.eq('publicId', id)));

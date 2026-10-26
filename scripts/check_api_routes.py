@@ -30,6 +30,7 @@ required = {
     ("POST", "/api/v1/agents/apply"),
     ("GET", "/api/v1/admin/agents/pending"),
     ("PATCH", "/api/v1/admin/agents/<id>/review"),
+    ("PATCH", "/api/v1/admin/documents/<id>/review"),
     ("POST", "/api/v1/conversations/<id>/messages"),
     ("POST", "/api/v1/deals"),
     ("GET", "/api/v1/trust/verify/<hash>"),
