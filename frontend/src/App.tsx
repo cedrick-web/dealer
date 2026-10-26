@@ -14,6 +14,7 @@ import { DashboardView } from '@/components/app/dashboard-view';
 import { DealWorkspaceView } from '@/components/app/deal-workspace';
 import { MessagingView } from '@/components/app/messaging-view';
 import { ListingReviewQueue } from '@/components/app/listing-review-queue';
+import { AdminAuditView } from '@/components/app/admin-audit-view';
 import { ListingEditorView, type ListingEditorForm, type NewListingPhotoDraft, type ListingPhotoPreview } from '@/components/app/listing-editor-view';
 import { NotificationsView } from '@/components/app/notifications-view';
 import { AgentDirectoryView, AgentApplicationView, AgentReviewQueue, type AgentApplicationForm } from '@/components/app/agent-workspace';
@@ -678,16 +679,19 @@ export default function App() {
           </div>
         </section>}
 
-        {view==='admin'&&<ListingReviewQueue
-          userRole={user?.role}
-          pending={pending}
-          busy={busy}
-          notes={reviewNotes}
-          onNoteChange={(id,value)=>setReviewNotes(previous=>({...previous,[id]:value}))}
-          onReview={runReview}
-          onOpenEvidence={item=>{setDocs([]);setModal(item)}}
-          onRefresh={()=>void withBusy(async()=>{const r=await api.adminPending();setPending(r.data||[])})}
-        />}
+        {view==='admin'&&<>
+          <ListingReviewQueue
+            userRole={user?.role}
+            pending={pending}
+            busy={busy}
+            notes={reviewNotes}
+            onNoteChange={(id,value)=>setReviewNotes(previous=>({...previous,[id]:value}))}
+            onReview={runReview}
+            onOpenEvidence={item=>{setDocs([]);setModal(item)}}
+            onRefresh={()=>void withBusy(async()=>{const r=await api.adminPending();setPending(r.data||[])})}
+          />
+          {user?.role==='admin'&&<AdminAuditView />}
+        </>}
         {view==='agent-review'&&<AgentReviewQueue
           userRole={user?.role}
           pending={pendingAgents}
