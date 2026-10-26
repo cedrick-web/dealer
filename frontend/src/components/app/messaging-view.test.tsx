@@ -31,7 +31,8 @@ describe('private messaging view', () => {
     expect(screen.getAllByText('House in Kinyinya').length).toBeGreaterThan(0);
     expect(screen.getByText('Private, authenticated thread')).toBeTruthy();
     expect(screen.getAllByText('Can we arrange a visit?').length).toBeGreaterThan(0);
-    expect(screen.getByText('Property participant')).toBeTruthy();
+    // The sender label shares a <small> element with its timestamp.
+    expect(screen.getByText(/Property participant/)).toBeTruthy();
   });
 
   it('sends the controlled composer form to the parent and disables empty messages', () => {
