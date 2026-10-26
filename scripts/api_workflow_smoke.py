@@ -75,7 +75,7 @@ def main():
                     {"decision": "approve", "note": "Readable document received."})
     assert verified["status"] == "verified"
     owner_notices = call("GET", "/api/v1/me/notifications", owner_token)["data"]
-    assert any(n["title"] == "Evidence review updated" and document_id in (n.get("body", "") + str(n.get("subjectId", "")))
+    assert any(n["title"] == "Evidence review updated" and "ci.pdf" in n.get("body", "")
                for n in owner_notices), "Document review must notify the listing owner."
     assert call("GET", f"/api/v1/trust/verify/{digest}")["exists"] is True
     call("PATCH", f"/api/v1/admin/documents/{document_id}/review", admin,
