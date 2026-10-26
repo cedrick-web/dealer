@@ -31,6 +31,15 @@ def register(label):
 def main():
     health = call("GET", "/health")
     assert health["status"] == "ok" and health["database"] == "connected"
+
+    # Failed-login throttling is shared in MongoDB, not tied to this API process.
+    throttle_email = f"ci-throttle-{RUN}@example.test"
+    for _ in range(8):
+        call("POST", "/api/v1/auth/login", expected=401, body={
+            "email": throttle_email, "password": "Definitely_Wrong_Password_123"})
+    throttled = call("POST", "/api/v1/auth/login", expected=429, body={
+        "email": throttle_email, "password": "Definitely_Wrong_Password_123"})
+    assert "15 minutes" in throttled.get("error", ""), "Login throttle must return a clear retry window."
     owner_token, _ = register("Owner")
     buyer_token, _ = register("Buyer")
     profile = call("PATCH", "/api/v1/me/profile", owner_token,
