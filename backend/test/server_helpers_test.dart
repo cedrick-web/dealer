@@ -65,6 +65,20 @@ void main() {
       expect(server.userFrom(request)?['sub'], 'user-test');
     });
 
+    test('rejects a token exactly at its expiry second', () {
+      final token = server.issueToken({
+        'sub': 'boundary-user',
+        'exp': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      });
+      final request = Request(
+        'GET',
+        Uri.parse('http://localhost/api/v1/auth/me'),
+        headers: {'authorization': 'Bearer $token'},
+      );
+
+      expect(server.userFrom(request), isNull);
+    });
+
     test('rejects an expired token', () {
       final token = server.issueToken({
         'sub': 'expired-user',
