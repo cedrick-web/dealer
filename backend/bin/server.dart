@@ -12,29 +12,6 @@ import 'package:uuid/uuid.dart';
 final uid = const Uuid();
 const maxLoginFailures = 8;
 const loginFailureWindow = Duration(minutes: 15);
-final Map<String, List<DateTime>> loginFailures = <String, List<DateTime>>{};
-
-List<DateTime> recentLoginFailures(String key) {
-  final cutoff = DateTime.now().subtract(loginFailureWindow);
-  final recent = (loginFailures[key] ?? <DateTime>[]).where((at) => at.isAfter(cutoff)).toList();
-  if (recent.isEmpty) {
-    loginFailures.remove(key);
-  } else {
-    loginFailures[key] = recent;
-  }
-  return recent;
-}
-bool loginIsThrottled(String key) => recentLoginFailures(key).length >= maxLoginFailures;
-void recordLoginFailure(String key) {
-  final recent = recentLoginFailures(key)..add(DateTime.now());
-  loginFailures[key] = recent;
-  // Bound memory growth when attackers rotate through arbitrary email strings.
-  if (loginFailures.length > 10000) {
-    final staleKeys = loginFailures.keys.take(1000).toList();
-    for (final staleKey in staleKeys) { loginFailures.remove(staleKey); }
-  }
-}
-void clearLoginFailures(String key) => loginFailures.remove(key);
 bool passwordMatches(String password, dynamic passwordHash) {
   if (passwordHash is! String || passwordHash.isEmpty) return false;
   try { return BCrypt.checkpw(password, passwordHash); } catch (_) { return false; }
@@ -177,10 +154,14 @@ Future<void> main() async {
   final listingImages = db.collection('listing_images');
   final agentApplications = db.collection('agent_applications');
   final notifications = db.collection('notifications');
+  final authLoginFailures = db.collection('auth_login_failures');
+  var loginRateLimitOperations = 0;
 
   // Explicit indexes make repeated lookups bounded and protect core identity
   // records from duplicate writes under concurrent requests.
   await users.createIndex(keys: {'email': 1}, unique: true, name: 'users_email_unique');
+  await authLoginFailures.createIndex(keys: {'key': 1, 'createdAt': -1}, name: 'auth_login_failures_key_created');
+  await authLoginFailures.createIndex(keys: {'createdAt': 1}, name: 'auth_login_failures_created');
   await users.createIndex(keys: {'publicId': 1}, unique: true, name: 'users_public_id_unique');
   await listings.createIndex(keys: {'publicId': 1}, unique: true, name: 'listings_public_id_unique');
   await listings.createIndex(keys: {'status': 1, 'createdAt': -1}, name: 'listings_status_created');
@@ -222,6 +203,27 @@ Future<void> main() async {
       'readAt': null,
       'createdAt': now(),
     });
+  }
+
+  // Shared MongoDB-backed throttling survives API restarts and is consistent across replicas.
+  // Each failure is a short-lived event; successful login clears only that email's events.
+  Future<int> recentLoginFailureCount(String key) async {
+    final cutoff = DateTime.now().subtract(loginFailureWindow);
+    loginRateLimitOperations++;
+    if (loginRateLimitOperations % 100 == 0) {
+      await authLoginFailures.deleteMany(where.lt('createdAt', cutoff));
+    }
+    return authLoginFailures.modernFind(
+      selector: where.eq('key', key).gt('createdAt', cutoff),
+    ).length;
+  }
+  Future<bool> loginIsThrottled(String key) async =>
+      await recentLoginFailureCount(key) >= maxLoginFailures;
+  Future<void> recordLoginFailure(String key) async {
+    await authLoginFailures.insertOne({'publicId': uid.v4(), 'key': key, 'createdAt': DateTime.now()});
+  }
+  Future<void> clearLoginFailures(String key) async {
+    await authLoginFailures.deleteMany(where.eq('key', key));
   }
 
   // Optional first-run admin bootstrap. Never expose an admin role in public registration.
@@ -280,11 +282,11 @@ Future<void> main() async {
     final email = clean(b['email'], 160).toLowerCase();
     final password = b['password'] is String ? b['password'] as String : '';
     final throttleKey = email.isEmpty ? '<empty-email>' : email;
-    if (loginIsThrottled(throttleKey)) {
+    if (await loginIsThrottled(throttleKey)) {
       return reply(429, {'error': 'Too many sign-in attempts. Wait 15 minutes before trying again.'}, {'retry-after': '900'});
     }
     if (utf8.encode(password).length > 72) {
-      recordLoginFailure(throttleKey);
+      await recordLoginFailure(throttleKey);
       return reply(401, {'error': 'Email or password is incorrect.'});
     }
     final person = asMap(await users.findOne(where.eq('email', email)));
@@ -292,7 +294,7 @@ Future<void> main() async {
       recordLoginFailure(throttleKey);
       return reply(401, {'error': 'Email or password is incorrect.'});
     }
-    clearLoginFailures(throttleKey);
+    await clearLoginFailures(throttleKey);
     final role = person['role'] as String? ?? 'member';
     final version = person['tokenVersion'] is int ? person['tokenVersion'] as int : 0;
     final token = issueToken({'sub': person['publicId'], 'email': email, 'role': role, 'ver': version, 'exp': DateTime.now().millisecondsSinceEpoch ~/ 1000 + 60 * 60 * 8});
