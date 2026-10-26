@@ -84,6 +84,10 @@ describe('Dealer application shell', () => {
     render(<App />);
     await waitFor(() => expect(screen.getAllByText('Shareable Kigali apartment').length).toBeGreaterThan(0));
     expect(window.location.pathname).toBe('/property/listing-share-123');
+    window.history.pushState({}, '', '/');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    await waitFor(() => expect(screen.queryByText('Shareable Kigali apartment')).toBeNull());
   });
 
   it('does not present imaginary homes when the API has no published inventory', async () => {

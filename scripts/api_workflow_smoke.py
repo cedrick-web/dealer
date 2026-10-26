@@ -33,6 +33,9 @@ def main():
     assert health["status"] == "ok" and health["database"] == "connected"
     owner_token, _ = register("Owner")
     buyer_token, _ = register("Buyer")
+    profile = call("PATCH", "/api/v1/me/profile", owner_token,
+                   {"name": "CI Owner Updated", "phone": "+250780000099"})
+    assert profile["user"]["name"] == "CI Owner Updated"
     admin = call("POST", "/api/v1/auth/login", expected=200, body={
         "email": os.environ["BOOTSTRAP_ADMIN_EMAIL"],
         "password": os.environ["BOOTSTRAP_ADMIN_PASSWORD"]})["token"]
@@ -71,8 +74,23 @@ def main():
     call("PATCH", f"/api/v1/admin/documents/{document_id}/review", admin,
          {"decision": "unknown", "note": ""}, 422)
 
+    rejected = call("PATCH", f"/api/v1/admin/listings/{listing_id}/review", admin, {
+        "decision": "reject", "note": "CI rejection used to verify owner resubmission."})
+    assert rejected["status"] == "rejected"
+    owner_listings = call("GET", "/api/v1/me/listings", owner_token)["data"]
+    assert next(x for x in owner_listings if x["publicId"] == listing_id)["status"] == "rejected"
+    revised_input = {
+        "title": "CI resubmitted property " + RUN,
+        "description": "Revised listing submitted after an administrator rejection for lifecycle testing.",
+        "propertyType": "house", "purpose": "sale",
+        "location": {"district": "Gasabo", "sector": "Kinyinya"},
+        "price": {"amount": 186000000, "currency": "RWF", "period": "once"}}
+    call("PATCH", f"/api/v1/me/listings/{listing_id}", buyer_token, revised_input, 404)
+    resubmitted = call("PATCH", f"/api/v1/me/listings/{listing_id}", owner_token, revised_input)
+    assert resubmitted["status"] == "pending_review"
+    assert any(x["publicId"] == listing_id for x in call("GET", "/api/v1/admin/listings/pending", admin)["data"])
     reviewed = call("PATCH", f"/api/v1/admin/listings/{listing_id}/review", admin, {
-        "decision": "approve", "note": "CI-only approval"})
+        "decision": "approve", "note": "CI-only approval after owner resubmission"})
     assert reviewed["status"] == "published"
     assert call("GET", f"/api/v1/listings/{listing_id}")["data"]["status"] == "published"
     call("GET", f"/api/v1/listing-images/{photo_id}", raw=True)

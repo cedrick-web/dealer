@@ -676,3 +676,8 @@ This route does not bypass API visibility rules: the API remains responsible for
 Evidence uploads are stored privately and start with the `not_reviewed` state. Administrators can mark a document verified, reject it, or request changes through `PATCH /api/v1/admin/documents/:id/review`. Every decision records the reviewer, timestamp, decision, note and original upload digest in the audit log; the listing owner receives an in-app notification. Only administrators can submit review decisions, while document metadata and downloads remain protected by the existing owner/deal-participant/admin authorization checks.
 
 A `verified` document status records a human review decision, not a guarantee of ownership, authenticity, title validity, or legal transfer. Review notes and file access must still be handled as sensitive information.
+
+
+### Lifecycle regression coverage
+
+The MongoDB-backed CI workflow now exercises account profile persistence, owner-only listing edits, rejected-listing visibility in the owner's workspace, resubmission into `pending_review`, administrator re-approval, and the document-review permission/status transitions. Frontend regression tests also exercise direct property URLs, refresh, and browser back navigation. These tests validate implemented workflows against the disposable CI database; they do not replace production security review or operational monitoring.
