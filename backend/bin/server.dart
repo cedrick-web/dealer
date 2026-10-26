@@ -291,7 +291,7 @@ Future<void> main() async {
     }
     final person = asMap(await users.findOne(where.eq('email', email)));
     if (person == null || person['status'] != 'active' || !passwordMatches(password, person['passwordHash'])) {
-      recordLoginFailure(throttleKey);
+      await recordLoginFailure(throttleKey);
       return reply(401, {'error': 'Email or password is incorrect.'});
     }
     await clearLoginFailures(throttleKey);
