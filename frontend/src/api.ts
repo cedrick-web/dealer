@@ -19,6 +19,7 @@ export type ListingImage = { publicId:string; alt:string; contentType:string; si
 export type ApiResult<T> = { data: T; [key: string]: unknown };
 export type Agent = { publicId:string; name:string; bio:string; districts:string[]; experienceYears:number; contactPhone?:string|null; updatedAt:string };
 export type AgentApplication = { publicId:string; userId:string; name:string; phone:string; showPhone:boolean; bio:string; districts:string[]; experienceYears:number; status:string; reviewNote?:string; createdAt:string; updatedAt:string };
+export type AuditEvent = { eventId?:string; type:string; subjectId?:string; actorId?:string; decision?:string; note?:string; evidenceHash?:string; createdAt?:string };
 export type AppNotification = { publicId:string; type:string; title:string; body:string; destination:string; subjectId?:string|null; readAt?:string|null; createdAt:string };
 
 
@@ -133,6 +134,12 @@ export const api = {
     a.href = url; a.download = fileName; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   },
   verifyHash: (hash:string) => request<{exists:boolean;meaning:string}>('/api/v1/trust/verify/' + encodeURIComponent(hash)),
+  adminAudit: (params:{limit?:number;type?:string} = {}) => {
+    const query = new URLSearchParams();
+    if (params.limit != null) query.set('limit', String(params.limit));
+    if (params.type) query.set('type', params.type);
+    return request<ApiResult<AuditEvent[]> & {limit:number;count:number}>('/api/v1/admin/audit' + (query.size ? '?' + query.toString() : ''));
+  },
   adminPending: () => request<ApiResult<Listing[]>>('/api/v1/admin/listings/pending'),
   adminReview: (id:string,decision:'approve'|'reject'|'request_changes',note:string) => request('/api/v1/admin/listings/' + encodeURIComponent(id) + '/review', {method:'PATCH',body:JSON.stringify({decision,note})}),
   adminReviewDocument: (id:string,decision:'approve'|'reject'|'request_changes',note:string) => request<{data:EvidenceDocument;status:string;message:string}>('/api/v1/admin/documents/' + encodeURIComponent(id) + '/review', {method:'PATCH',body:JSON.stringify({decision,note})}),
