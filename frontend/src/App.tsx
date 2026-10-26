@@ -32,6 +32,11 @@ type View = 'discover'|'agents'|'agent-application'|'agent-review'|'notification
 type AuthMode = 'login'|'register';
 
 const routeForView = (view: View) => view === 'discover' ? '/' : `/${view}`;
+const propertyIdFromPath = (pathname: string): string | null => {
+  const segments = pathname.replace(/\/+$/, '').split('/').filter(Boolean);
+  if (segments[0] !== 'property' || !segments[1]) return null;
+  try { return decodeURIComponent(segments[1]); } catch { return null; }
+};
 const viewFromPath = (pathname: string): View => {
   const segment = pathname.replace(/\/+$/, '').split('/').filter(Boolean)[0] || 'discover';
   const known: View[] = ['discover','agents','agent-application','agent-review','notifications','dashboard','enquiries','new-listing','my-listings','saved','messages','deals','trust','account','admin'];
@@ -80,6 +85,7 @@ export default function App() {
   const [propertyType,setPropertyType] = useState('All properties');
   const [sort,setSort] = useState('newest');
   const [modal,setModal] = useState<Listing|null>(null);
+  const [locationReady,setLocationReady] = useState(false);
   const [language,setLanguage] = useState<'en'|'rw'>('en');
   const [authForm,setAuthForm] = useState({name:'',email:'',phone:'',password:''});
   const [profileForm,setProfileForm] = useState({name:'',phone:''});
@@ -97,14 +103,39 @@ export default function App() {
   const [reviewNotes,setReviewNotes] = useState<Record<string,string>>({});
 
   useEffect(() => {
-    const onPopState = () => setView(viewFromPath(window.location.pathname));
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
+    let active = true;
+    const syncLocation = () => {
+      const pathname = window.location.pathname;
+      const propertyId = propertyIdFromPath(pathname);
+      setView(viewFromPath(pathname));
+      if (!propertyId) {
+        setModal(null);
+        setLocationReady(true);
+        return;
+      }
+      setLocationReady(false);
+      void api.listing(propertyId).then(result => {
+        if (!active) return;
+        setModal(result.data);
+        setDocs([]);
+      }).catch(() => {
+        if (active) setModal(null);
+      }).finally(() => {
+        if (active) setLocationReady(true);
+      });
+    };
+    syncLocation();
+    window.addEventListener('popstate', syncLocation);
+    return () => {
+      active = false;
+      window.removeEventListener('popstate', syncLocation);
+    };
   }, []);
   useEffect(() => {
-    const nextPath = routeForView(view);
-    if (window.location.pathname !== nextPath) window.history.pushState({ view }, '', nextPath);
-  }, [view]);
+    if (!locationReady) return;
+    const nextPath = modal ? `/property/${encodeURIComponent(modal.publicId)}` : routeForView(view);
+    if (window.location.pathname !== nextPath) window.history.pushState({ view, propertyId: modal?.publicId }, '', nextPath);
+  }, [view, modal?.publicId, locationReady]);
 
   const t = (en:string,rw:string) => language==='en'?en:rw;
   const flash = (text:string) => { setNotice(text); window.setTimeout(()=>setNotice(current=>current===text?'':current),6500); };
