@@ -150,7 +150,8 @@ def verify():
     notices = call("GET", "/api/v1/me/notifications", owner_token)["data"]
     assert any(
         item.get("title") == "Evidence review updated"
-        and document_id == item.get("subjectId")
+        and listing_id == item.get("subjectId")
+        and "persistence-ci.pdf" in item.get("body", "")
         and "readable test fixture" in item.get("body", "")
         for item in notices
     ), "Evidence-review notification was not retained after API restart."
