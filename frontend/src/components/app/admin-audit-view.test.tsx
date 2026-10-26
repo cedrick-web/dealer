@@ -32,7 +32,7 @@ describe('admin audit view', () => {
     expect(screen.getByText('approve')).toBeTruthy();
     expect(screen.getByText('Reviewed uploaded title document')).toBeTruthy();
     expect(screen.getByText('aaaaaaaaaaaa…')).toBeTruthy();
-    expect(screen.queryByText(/storage path|raw file contents/i)).toBeNull();
+    expect(screen.queryByText('ci.pdf')).toBeNull();
     expect(api.adminAudit).toHaveBeenCalledWith({ limit: 100 });
   });
 
