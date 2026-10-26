@@ -135,13 +135,17 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!locationReady) return;
-    const nextPath = modal ? `/property/${encodeURIComponent(modal.publicId)}` : routeForView(view);
+    const nextPath = modal?.status === 'published' ? `/property/${encodeURIComponent(modal.publicId)}` : routeForView(view);
     if (window.location.pathname !== nextPath) window.history.pushState({ view, propertyId: modal?.publicId }, '', nextPath);
-  }, [view, modal?.publicId, locationReady]);
+  }, [view, modal?.publicId, modal?.status, locationReady]);
 
   const t = (en:string,rw:string) => language==='en'?en:rw;
   const flash = (text:string) => { setNotice(text); window.setTimeout(()=>setNotice(current=>current===text?'':current),6500); };
   const shareListing = async (item: Listing) => {
+    if (item.status !== 'published') {
+      flash('This listing is not public yet. Administrator approval is required before it can be shared.');
+      return;
+    }
     const url = `${window.location.origin}/property/${encodeURIComponent(item.publicId)}`;
     try {
       if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
