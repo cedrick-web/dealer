@@ -60,6 +60,9 @@ def main():
         "fileName": "ci.pdf", "contentType": "application/pdf",
         "base64": base64.b64encode(pdf).decode()}, 201)
     document_id, digest = document["data"]["publicId"], document["sha256"]
+    assert document["status"] == "pending_review"
+    owner_docs_before_review = call("GET", f"/api/v1/listings/{listing_id}/documents", owner_token)["data"]
+    assert next(x for x in owner_docs_before_review if x["publicId"] == document_id)["reviewStatus"] == "not_reviewed"
     call("GET", f"/api/v1/listings/{listing_id}/documents", buyer_token, expected=403)
     call("GET", f"/api/v1/documents/{document_id}/download", buyer_token, expected=403)
     call("GET", f"/api/v1/documents/{document_id}/download", expected=401)
@@ -71,6 +74,10 @@ def main():
     verified = call("PATCH", f"/api/v1/admin/documents/{document_id}/review", admin,
                     {"decision": "approve", "note": "Readable document received."})
     assert verified["status"] == "verified"
+    owner_notices = call("GET", "/api/v1/me/notifications", owner_token)["data"]
+    assert any(n["title"] == "Evidence review updated" and document_id in (n.get("body", "") + str(n.get("subjectId", "")))
+               for n in owner_notices), "Document review must notify the listing owner."
+    assert call("GET", f"/api/v1/trust/verify/{digest}")["exists"] is True
     call("PATCH", f"/api/v1/admin/documents/{document_id}/review", admin,
          {"decision": "unknown", "note": ""}, 422)
 
