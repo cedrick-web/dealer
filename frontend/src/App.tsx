@@ -293,7 +293,7 @@ export default function App() {
     setUnreadCount(0);
     flash('All notifications marked as read.');
   });
-  const signOut = () => { setSessionToken('');setUser(null);setEditingListingId(null);setExistingImages([]);setNewListingPhotos([]);setListingForm({title:'',description:'',propertyType:'house',purpose:'sale',district:'Gasabo',sector:'',price:''});setMyItems([]);setSavedIds([]);setSavedItems([]);setLeads([]);setConversations([]);setMessages([]);setDeals([]);setAgentApplication(null);setPendingAgents([]);setPending([]);setView('discover');flash(t('You have signed out.','Wasohotse muri konti.')); };
+  const signOut = () => { setSessionToken('');setUser(null);setEditingListingId(null);setExistingImages([]);setNewListingPhotos([]);setListingForm({title:'',description:'',propertyType:'house',purpose:'sale',district:'Gasabo',sector:'',price:''});setMyItems([]);setSavedIds([]);setSavedItems([]);setCompareIds([]);setLeads([]);setConversations([]);setMessages([]);setDeals([]);setAgentApplication(null);setPendingAgents([]);setPending([]);setView('discover');flash(t('You have signed out.','Wasohotse muri konti.')); };
   const saveListing = (item:Listing) => {
     if(!requireUser()) return;
     void withBusy(async()=>{
