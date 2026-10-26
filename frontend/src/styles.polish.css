@@ -1,0 +1,150 @@
+/* Senior UI refinement layer: accessible type scale, consistent controls, responsive workspace. */
+:root {
+  color-scheme: light;
+  --green: #174b3c;
+  --green2: #27684e;
+  --ink: #1b2e24;
+  --muted: #64736a;
+  --line: #e2e8df;
+  --card: #fff;
+  --canvas: #f7f8f4;
+  --shadow: 0 16px 44px rgba(20,48,34,.075);
+  font-size: 16px;
+}
+body { color: var(--ink); background: var(--canvas); }
+button, input, select, textarea { font-size: 14px; }
+.app-header { gap: clamp(14px, 2.2vw, 32px); padding-inline: clamp(14px, 2.1vw, 30px); }
+.brand { min-width: 176px; }
+.brand-name { font-size: 17px; }
+.brand-name small { font-size: 9px; }
+.header-search { min-height: 44px; border-radius: 10px; }
+.header-search input { font-size: 14px; }
+.header-search kbd { font-size: 11px; }
+.header-actions { gap: clamp(8px, 1.2vw, 15px); }
+.locale-button { min-height: 38px; font-size: 12px; }
+.api-pill { font-size: 11px; }
+.sidebar { width: 258px; padding-inline: 18px; }
+.sidebar-label, .nav-group-title { font-size: 10px; }
+.nav-link { min-height: 44px; height: auto; padding-block: 10px; font-size: 13px; border-radius: 9px; }
+.nav-count { font-size: 11px; }
+.security-callout b { font-size: 13px; }
+.security-callout p { font-size: 12px; line-height: 1.65; }
+.security-callout button { font-size: 12px; }
+.mini-profile b { font-size: 12px; }
+.mini-profile small { font-size: 11px; }
+.workspace { padding: clamp(22px, 3vw, 42px) clamp(16px, 3vw, 48px) 72px; }
+.page-heading { margin-bottom: 28px; }
+.eyebrow { font-size: 11px; letter-spacing: .12em; }
+.page-heading h1 { font-size: clamp(27px, 2.35vw, 36px); letter-spacing: -.04em; }
+.page-heading p { font-size: 14px; line-height: 1.7; }
+.btn { min-height: 40px; padding: 11px 15px; border-radius: 9px; font-size: 13px; }
+.btn-sm { min-height: 36px; padding: 9px 12px; font-size: 12px; }
+.hero-panel { border-radius: 18px; padding: clamp(24px, 3vw, 40px); }
+.hero-kicker { font-size: 11px; }
+.hero-text h2 { font-size: clamp(34px, 3.6vw, 52px); }
+.hero-text > p { font-size: 14px; line-height: 1.75; }
+.hero-stats b { font-size: 18px; }
+.hero-stats small { font-size: 11px; }
+.float-chip { font-size: 11px; border-radius: 10px; }
+.quick-actions { gap: 14px; }
+.quick-actions > button { padding: 17px; border-radius: 12px; }
+.quick-actions b { font-size: 13px; }
+.quick-actions small { font-size: 12px; }
+.toolbar { gap: 10px; padding: 14px; border-radius: 12px; }
+.purpose-switch button { font-size: 12px; padding: 10px 15px; }
+.filter-control { min-height: 40px; }
+.filter-control select { font-size: 12px; }
+.section-title-row h2 { font-size: 20px; }
+.section-title-row p { font-size: 12px; line-height: 1.6; }
+.count-pill { font-size: 11px; }
+.listing-grid { gap: 20px; }
+.listing-card { border-radius: 14px; }
+.listing-photo { height: clamp(170px, 15vw, 225px); }
+.listing-card h3, .listing-card h4 { font-size: 16px; line-height: 1.4; }
+.listing-card p { font-size: 13px; line-height: 1.6; }
+.listing-card small { font-size: 11px; }
+.panel { border-radius: 14px; }
+.panel-heading h3, .editor-panel .panel-heading h3 { font-size: 17px; }
+.panel-heading p, .field-help { font-size: 12px; line-height: 1.6; }
+.field > span, .field label { font-size: 13px; }
+.field input, .field select, .field textarea, input, select, textarea { font-size: 14px; }
+input, select, textarea { min-height: 42px; }
+textarea { min-height: 110px; }
+.metric-card { border-radius: 13px; }
+.metric-card small { font-size: 12px; }
+.metric-card strong { font-size: 26px; }
+.metric-card > div > span { font-size: 11px; }
+.compact-main b, .activity-row b { font-size: 13px; }
+.compact-main small, .activity-row small { font-size: 11px; }
+.status-pill { font-size: 11px; }
+.empty-state h3 { font-size: 19px; }
+.empty-state p { max-width: 520px; font-size: 14px; line-height: 1.7; }
+.toast { max-width: min(560px, calc(100vw - 28px)); font-size: 13px; line-height: 1.5; }
+.notification-trigger { min-width: 40px; min-height: 40px; }
+:where(button, a, input, select, textarea, [role="button"]):focus-visible { outline: 3px solid #76a889; outline-offset: 3px; }
+@media (max-width: 1180px) {
+  .sidebar { width: 228px; }
+  .workspace { padding-inline: 22px; }
+  .listing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quick-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 860px) {
+  .app-header { height: 68px; gap: 12px; }
+  .brand { min-width: auto; }
+  .brand-mark { width: 36px; height: 36px; }
+  .header-search { max-width: none; }
+  .header-search kbd, .api-pill { display: none; }
+  .app-body { min-height: calc(100vh - 68px); }
+  .sidebar { width: 260px; min-height: calc(100vh - 68px); }
+  .workspace { padding: 24px 18px 60px; }
+  .hero-panel { min-height: 250px; }
+  .hero-illustration { min-width: 150px; transform: scale(.88); transform-origin: center right; }
+  .quick-actions { grid-template-columns: 1fr; }
+  .quick-actions > button { min-height: 76px; }
+}
+@media (max-width: 600px) {
+  .app-header { padding-inline: 12px; }
+  .brand-name { font-size: 15px; }
+  .brand-name small { font-size: 8px; }
+  .header-search { height: 40px; min-width: 0; padding-inline: 9px; }
+  .header-search > svg { width: 15px; flex-shrink: 0; }
+  .header-search input { font-size: 12px; }
+  .header-actions { gap: 6px; }
+  .locale-button { min-height: 34px; padding: 7px; }
+  .notification-trigger { min-width: 34px; min-height: 34px; }
+  .mobile-toggle { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; min-height: 34px; }
+  .workspace { padding: 20px 13px 48px; }
+  .page-heading { align-items: flex-start; flex-direction: column; gap: 14px; margin-bottom: 22px; }
+  .page-heading h1 { font-size: 27px; }
+  .page-heading p { font-size: 13px; }
+  .heading-actions { width: 100%; }
+  .heading-actions .btn { flex: 1; }
+  .hero-panel { padding: 24px 20px; min-height: 0; }
+  .hero-text { max-width: 100%; }
+  .hero-text h2 { font-size: clamp(32px, 9vw, 43px); }
+  .hero-illustration { display: none; }
+  .hero-stats { gap: 18px; flex-wrap: wrap; }
+  .hero-stats b { font-size: 16px; }
+  .hero-stats small { font-size: 10px; }
+  .listing-grid { grid-template-columns: 1fr; gap: 14px; }
+  .listing-photo { height: 220px; }
+  .toolbar { align-items: stretch; }
+  .purpose-switch { width: 100%; }
+  .purpose-switch button { flex: 1; }
+  .filter-control { flex: 1 1 44%; min-width: 0; }
+  .section-title-row { align-items: flex-start; gap: 10px; }
+  .section-title-row h2 { font-size: 18px; }
+  .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .metric-card { padding: 13px; gap: 9px; }
+  .metric-card strong { font-size: 23px; }
+  .two-column { grid-template-columns: 1fr; }
+  .form-grid { grid-template-columns: 1fr; }
+  .field-wide { grid-column: auto; }
+  .form-footer { align-items: stretch; flex-direction: column; }
+  .form-footer .btn { width: 100%; }
+  .notice-banner { align-items: flex-start; flex-wrap: wrap; }
+  .notice-banner a { margin-left: 30px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
