@@ -193,3 +193,26 @@ textarea { min-height: 110px; }
   .compare-table th, .compare-table td { min-width: 155px; padding: 12px; }
   .compare-table th:first-child { min-width: 100px; width: 100px; }
 }
+
+
+/* Owner listing lifecycle and reviewer feedback */
+.listing-lifecycle {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 13px;
+  border: 1px solid var(--line, #e4e8ed);
+  border-radius: 13px;
+  background: var(--surface, #fff);
+}
+.listing-lifecycle-state { display: flex; align-items: flex-start; gap: 10px; color: var(--ink, #17212b); }
+.listing-lifecycle-state > svg { flex: 0 0 auto; margin-top: 2px; color: var(--muted, #687583); }
+.listing-lifecycle-state strong { display: block; font-size: 12px; text-transform: capitalize; }
+.listing-lifecycle-state p, .listing-review-feedback p { margin: 4px 0 0; color: var(--muted, #687583); font-size: 11px; line-height: 1.55; }
+.listing-review-feedback { padding: 10px 11px; border-left: 3px solid var(--warning, #b7791f); border-radius: 0 8px 8px 0; background: var(--surface-subtle, #f7f9fb); }
+.listing-review-feedback b { display: block; font-size: 11px; }
+.listing-lifecycle .owner-card-actions { margin-top: 0; }
+@media (max-width: 520px) {
+  .listing-lifecycle .owner-card-actions { align-items: stretch; flex-direction: column; }
+  .listing-lifecycle .owner-card-actions .btn { justify-content: center; }
+}
