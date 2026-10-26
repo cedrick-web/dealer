@@ -570,6 +570,35 @@ Future<void> main() async {
     await notifyUser(recipientId: listing['ownerId']?.toString(), actorId: c['sub']?.toString(), type: 'listing_review', title: 'Listing review updated', body: 'Your listing "' + clean(listing['title'], 100) + '" is now ' + status.replaceAll('_', ' ') + (note.isNotEmpty ? '. Note: ' + note : '.'), destination: 'my-listings', subjectId: id);
     return reply(200, {'id': id, 'status': status});
   });
+  r.get('/api/v1/admin/audit', (Request q) async {
+    final c = await currentUser(q, users); if (c == null) return unauthenticated();
+    if (c['role'] != 'admin') return reply(403, {'error': 'Administrator access required.'});
+    final requestedLimit = int.tryParse(q.url.queryParameters['limit'] ?? '') ?? 50;
+    final limit = requestedLimit.clamp(1, 100);
+    final type = clean(q.url.queryParameters['type'], 80);
+    final selector = type.isEmpty ? where : where.eq('type', type);
+    final events = await audit.modernFind(
+      selector: selector,
+      sort: {'createdAt': -1},
+      limit: limit,
+    ).toList();
+    final data = events.map((raw) {
+      final event = Map<String, dynamic>.from(raw);
+      // Never expose internal Mongo IDs, file paths, credentials, or raw document content.
+      return <String, dynamic>{
+        if (event['eventId'] != null) 'eventId': event['eventId'],
+        if (event['type'] != null) 'type': event['type'],
+        if (event['subjectId'] != null) 'subjectId': event['subjectId'],
+        if (event['actorId'] != null) 'actorId': event['actorId'],
+        if (event['decision'] != null) 'decision': event['decision'],
+        if (event['note'] != null) 'note': event['note'],
+        if (event['evidenceHash'] != null) 'evidenceHash': event['evidenceHash'],
+        if (event['createdAt'] != null) 'createdAt': event['createdAt'],
+      };
+    }).toList();
+    return reply(200, {'data': data, 'limit': limit, 'count': data.length});
+  });
+
   r.get('/api/v1/admin/listings/pending', (Request q) async {
     final c = await currentUser(q, users); if (c == null) return unauthenticated();
     if (c['role'] != 'admin') return reply(403, {'error': 'Administrator access required.'});
