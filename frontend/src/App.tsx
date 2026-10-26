@@ -33,7 +33,7 @@ type AuthMode = 'login'|'register';
 
 const routeForView = (view: View) => view === 'discover' ? '/' : `/${view}`;
 const viewFromPath = (pathname: string): View => {
-  const segment = pathname.replace(/\\/+$/, '').split('/').filter(Boolean)[0] || 'discover';
+  const segment = pathname.replace(/\/+$/, '').split('/').filter(Boolean)[0] || 'discover';
   const known: View[] = ['discover','agents','agent-application','agent-review','notifications','dashboard','enquiries','new-listing','my-listings','saved','messages','deals','trust','account','admin'];
   return known.includes(segment as View) ? segment as View : 'discover';
 };
