@@ -91,6 +91,13 @@ def prepare():
     })
     assert published["status"] == "published"
 
+    throttle_email = f"ci-persistence-throttle-{run}@example.test"
+    for _ in range(8):
+        call("POST", "/api/v1/auth/login", body={
+            "email": throttle_email,
+            "password": "Definitely_Wrong_Password_123",
+        }, expected=401)
+
     with open(STATE_FILE, "w", encoding="utf-8") as state:
         json.dump({
             "owner_token": token,
@@ -100,6 +107,7 @@ def prepare():
             "document_id": document_id,
             "evidence_hash": digest,
             "title": title,
+            "throttle_email": throttle_email,
         }, state)
     print("PASS: created and published a listing and approved a CI-only evidence fixture before API restart.")
 
@@ -113,6 +121,11 @@ def verify():
     owner_token = saved["owner_token"]
     buyer_token = saved["buyer_token"]
     admin_token = saved["admin_token"]
+    throttle = call("POST", "/api/v1/auth/login", body={
+        "email": saved["throttle_email"],
+        "password": "Definitely_Wrong_Password_123",
+    }, expected=429)
+    assert "15 minutes" in throttle.get("error", ""), "Login throttle state was not retained after API restart."
 
     public_listing = call("GET", f"/api/v1/listings/{listing_id}")["data"]
     assert public_listing["status"] == "published", "Published listing state was not retained after API restart."
@@ -156,7 +169,7 @@ def verify():
         for item in notices
     ), "Evidence-review notification was not retained after API restart."
 
-    print("PASS: listing ownership/content/status, private evidence bytes and access controls, evidence review state, digest lookup, both audit decisions and owner notification survived API restart.")
+    print("PASS: listing ownership/content/status, private evidence bytes and access controls, evidence review state, digest lookup, both audit decisions and owner notification and failed-login throttle survived API restart.")
 
 
 if __name__ == "__main__":
