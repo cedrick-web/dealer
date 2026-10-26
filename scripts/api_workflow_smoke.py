@@ -40,6 +40,12 @@ def main():
         "email": os.environ["BOOTSTRAP_ADMIN_EMAIL"],
         "password": os.environ["BOOTSTRAP_ADMIN_PASSWORD"]})["token"]
 
+    call("GET", "/api/v1/admin/audit", owner_token, expected=403)
+    audit_feed = call("GET", "/api/v1/admin/audit?limit=10", admin)
+    assert isinstance(audit_feed["data"], list) and audit_feed["limit"] == 10
+    call("GET", "/api/v1/admin/audit?limit=1000", admin)
+    call("GET", "/api/v1/admin/audit?limit=0", admin)
+
     listing = call("POST", "/api/v1/listings", owner_token, {
         "title": "CI property " + RUN,
         "description": "Temporary test listing used to validate real API workflows.",
@@ -74,6 +80,9 @@ def main():
     verified = call("PATCH", f"/api/v1/admin/documents/{document_id}/review", admin,
                     {"decision": "approve", "note": "Readable document received."})
     assert verified["status"] == "verified"
+    audit_after_review = call("GET", "/api/v1/admin/audit?type=document.reviewed&limit=100", admin)["data"]
+    assert any(e.get("subjectId") == document_id and e.get("decision") == "approve" and e.get("evidenceHash") == digest
+               for e in audit_after_review), "Admin audit feed must preserve the evidence review decision and upload digest."
     owner_notices = call("GET", "/api/v1/me/notifications", owner_token)["data"]
     assert any(n["title"] == "Evidence review updated" and "ci.pdf" in n.get("body", "")
                for n in owner_notices), "Document review must notify the listing owner."
