@@ -11,7 +11,7 @@ BASE = os.environ.get("API_BASE_URL", "http://127.0.0.1:8080")
 STATE_FILE = "/tmp/dealer-persistence-state.json"
 
 
-def call(method, path, token=None, body=None, expected=200):
+def call(method, path, token=None, body=None, expected=200, raw=False):
     headers = {"Authorization": "Bearer " + token} if token else {}
     data = None
     if body is not None:
@@ -26,6 +26,8 @@ def call(method, path, token=None, body=None, expected=200):
     assert status == expected, (
         f"{method} {path}: expected {expected}, got {status}: {payload[:400]!r}"
     )
+    if raw:
+        return payload
     return json.loads(payload) if payload else {}
 
 
@@ -48,6 +50,12 @@ def prepare():
         "price": {"amount": 175000000, "currency": "RWF", "period": "once"},
     }, expected=201)
     listing_id = listing["id"]
+    buyer = call("POST", "/api/v1/auth/register", body={
+        "name": "Persistence CI Buyer",
+        "email": f"ci-persistence-buyer-{run}@example.test",
+        "password": "CI_Test_Password_12345",
+    }, expected=201)
+    buyer_token = buyer["token"]
 
     # A harmless CI-only PDF fixture tests the metadata, review state, hash and
     # notification/audit records without uploading anyone's real documents.
@@ -86,6 +94,7 @@ def prepare():
     with open(STATE_FILE, "w", encoding="utf-8") as state:
         json.dump({
             "owner_token": token,
+            "buyer_token": buyer_token,
             "admin_token": admin,
             "listing_id": listing_id,
             "document_id": document_id,
@@ -102,6 +111,7 @@ def verify():
     document_id = saved["document_id"]
     digest = saved["evidence_hash"]
     owner_token = saved["owner_token"]
+    buyer_token = saved["buyer_token"]
     admin_token = saved["admin_token"]
 
     public_listing = call("GET", f"/api/v1/listings/{listing_id}")["data"]
@@ -116,6 +126,11 @@ def verify():
     evidence = next((item for item in docs if item["publicId"] == document_id), None)
     assert evidence is not None, "Evidence metadata was not retained after API restart."
     assert evidence["reviewStatus"] == "verified", "Evidence review state was not retained after API restart."
+
+    downloaded = call("GET", f"/api/v1/documents/{document_id}/download", owner_token, raw=True)
+    assert downloaded.startswith(b"%PDF-1.4"), "Private evidence bytes were not retained after API restart."
+    call("GET", f"/api/v1/listings/{listing_id}/documents", buyer_token, expected=403)
+    call("GET", f"/api/v1/documents/{document_id}/download", buyer_token, expected=403)
 
     verification = call("GET", f"/api/v1/trust/verify/{digest}")
     assert verification["exists"] is True, "Evidence digest index lookup failed after API restart."
@@ -140,7 +155,7 @@ def verify():
         for item in notices
     ), "Evidence-review notification was not retained after API restart."
 
-    print("PASS: listing ownership/content/status, evidence metadata/review note, digest lookup, both audit decisions and owner notification survived API restart.")
+    print("PASS: listing ownership/content/status, private evidence bytes and access controls, evidence review state, digest lookup, both audit decisions and owner notification survived API restart.")
 
 
 if __name__ == "__main__":
