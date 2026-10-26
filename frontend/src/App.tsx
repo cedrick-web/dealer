@@ -31,9 +31,15 @@ import { api, type Agent, type AgentApplication, type AppNotification, type Conv
 type View = 'discover'|'agents'|'agent-application'|'agent-review'|'notifications'|'dashboard'|'enquiries'|'new-listing'|'my-listings'|'saved'|'messages'|'deals'|'trust'|'account'|'admin';
 type AuthMode = 'login'|'register';
 
+const routeForView = (view: View) => view === 'discover' ? '/' : `/${view}`;
+const viewFromPath = (pathname: string): View => {
+  const segment = pathname.replace(/\\/+$/, '').split('/').filter(Boolean)[0] || 'discover';
+  const known: View[] = ['discover','agents','agent-application','agent-review','notifications','dashboard','enquiries','new-listing','my-listings','saved','messages','deals','trust','account','admin'];
+  return known.includes(segment as View) ? segment as View : 'discover';
+};
 
 export default function App() {
-  const [view,setView] = useState<View>('discover');
+  const [view,setView] = useState<View>(() => viewFromPath(window.location.pathname));
   const [returnView,setReturnView] = useState<View>('dashboard');
   const [items,setItems] = useState<Listing[]>([]);
   const [listingPage,setListingPage] = useState(1);
@@ -88,6 +94,16 @@ export default function App() {
   const [hashInput,setHashInput] = useState('');
   const [hashResult,setHashResult] = useState<{exists:boolean;meaning:string}|null>(null);
   const [reviewNotes,setReviewNotes] = useState<Record<string,string>>({});
+
+  useEffect(() => {
+    const onPopState = () => setView(viewFromPath(window.location.pathname));
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+  useEffect(() => {
+    const nextPath = routeForView(view);
+    if (window.location.pathname !== nextPath) window.history.pushState({ view }, '', nextPath);
+  }, [view]);
 
   const t = (en:string,rw:string) => language==='en'?en:rw;
   const flash = (text:string) => { setNotice(text); window.setTimeout(()=>setNotice(current=>current===text?'':current),6500); };
