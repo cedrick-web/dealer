@@ -45,6 +45,22 @@ jobs:
           jq -e '.status == "ok" and .database == "connected"' /tmp/health.json
       - name: Exercise complete property and deal workflows
         run: python3 scripts/api_workflow_smoke.py
+      - name: Prepare persistent listing fixture
+        run: python3 scripts/persistence_smoke.py prepare
+      - name: Restart API without restarting MongoDB
+        run: |
+          set -euo pipefail
+          docker compose restart api
+          for attempt in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:8080/health -o /tmp/health-after-restart.json; then
+              break
+            fi
+            sleep 2
+          done
+          test -s /tmp/health-after-restart.json
+          jq -e '.status == "ok" and .database == "connected"' /tmp/health-after-restart.json
+      - name: Verify persisted listing after API restart
+        run: python3 scripts/persistence_smoke.py verify
       - name: Collect container logs on failure
         if: failure()
         run: |
