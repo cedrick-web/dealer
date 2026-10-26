@@ -45,12 +45,15 @@ describe('Dealer application shell', () => {
   });
 
   it('keeps workspace navigation in the URL and supports browser history', async () => {
+    window.history.replaceState({}, '', '/messages');
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Saved properties' }));
-    await waitFor(() => expect(window.location.pathname).toBe('/saved'));
+    expect(await screen.findByRole('heading', { name: /Private conversations/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Go to discover' }));
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(await screen.findByRole('heading', { name: /Find a property with a clearer record/i })).toBeTruthy();
     window.history.pushState({}, '', '/messages');
     window.dispatchEvent(new PopStateEvent('popstate'));
-    await waitFor(() => expect(screen.getByRole('heading', { name: /Private conversations|Messages/i })).toBeTruthy());
+    expect(await screen.findByRole('heading', { name: /Private conversations/i })).toBeTruthy();
   });
 
   it('does not present imaginary homes when the API has no published inventory', async () => {
