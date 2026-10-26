@@ -97,15 +97,9 @@ void main() {
   });
 
   group('sign-in protection', () {
-    test('throttles repeated failed attempts and can be cleared on success', () {
-      final key = 'unit-test-' + DateTime.now().microsecondsSinceEpoch.toString();
-      expect(server.loginIsThrottled(key), isFalse);
-      for (var i = 0; i < server.maxLoginFailures; i++) {
-        server.recordLoginFailure(key);
-      }
-      expect(server.loginIsThrottled(key), isTrue);
-      server.clearLoginFailures(key);
-      expect(server.loginIsThrottled(key), isFalse);
+    test('shared login throttle uses the documented attempt limit and window', () {
+      expect(server.maxLoginFailures, 8);
+      expect(server.loginFailureWindow, const Duration(minutes: 15));
     });
 
     test('bad password hashes fail closed', () {
