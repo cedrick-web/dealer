@@ -50,7 +50,7 @@ describe('Dealer application shell', () => {
     await waitFor(() => expect(window.location.pathname).toBe('/saved'));
     window.history.pushState({}, '', '/messages');
     window.dispatchEvent(new PopStateEvent('popstate'));
-    await waitFor(() => expect(screen.getByRole('heading', { name: /Private messages|Messages/i })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('heading', { name: /Private conversations|Messages/i })).toBeTruthy());
   });
 
   it('does not present imaginary homes when the API has no published inventory', async () => {
