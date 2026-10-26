@@ -25,6 +25,20 @@ describe('Dealer application shell', () => {
       if (url.includes('/api/v1/agents')) {
         return jsonResponse({ data: [] });
       }
+      if (/\/api\/v1\/listings\/[^/?]+$/.test(url)) {
+        return jsonResponse({ data: {
+          publicId: 'listing-share-123',
+          ownerId: 'owner-1',
+          title: 'Shareable Kigali apartment',
+          description: 'A directly addressable listing for route regression coverage.',
+          propertyType: 'apartment',
+          purpose: 'rent',
+          location: { district: 'Gasabo', sector: 'Remera' },
+          price: { amount: 250000, currency: 'RWF', period: 'month' },
+          status: 'published',
+          images: [],
+        } });
+      }
       if (url.includes('/api/v1/listings')) {
         return jsonResponse({ data: [], page: 1, limit: 60, total: 0, hasMore: false });
       }
@@ -54,6 +68,22 @@ describe('Dealer application shell', () => {
     window.history.pushState({}, '', '/messages');
     window.dispatchEvent(new PopStateEvent('popstate'));
     expect(await screen.findByRole('heading', { name: /Private conversations/i })).toBeTruthy();
+  });
+
+  it('loads a shareable property URL directly and keeps it addressable after refresh', async () => {
+    window.history.replaceState({}, '', '/property/listing-share-123');
+    const { unmount } = render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Shareable Kigali apartment' })).toBeTruthy();
+    expect(window.location.pathname).toBe('/property/listing-share-123');
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/listings/listing-share-123'),
+      expect.anything(),
+    );
+    unmount();
+    window.history.replaceState({}, '', '/property/listing-share-123');
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Shareable Kigali apartment' })).toBeTruthy();
+    expect(window.location.pathname).toBe('/property/listing-share-123');
   });
 
   it('does not present imaginary homes when the API has no published inventory', async () => {
